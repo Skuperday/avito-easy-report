@@ -12,6 +12,8 @@ import (
 )
 
 // Функция для получения всех объявлений из Excel
+// возвращает слайс объявлений
+// получает на вход объект содержащий файл отчета
 func GetAllOffers(report *excelize.File) []models.Offer {
 	var result []models.Offer
 	rows, _ := report.GetRows("Sheet1")
@@ -22,7 +24,7 @@ func GetAllOffers(report *excelize.File) []models.Offer {
 	return result
 }
 
-// Функция для получения чтения всех отчетов (статистики) из директории /reports
+// Функция для получения всех отчетов (статистики) из директории /reports
 func GetAllReports() []*excelize.File {
 	files, err := os.ReadDir("./reports")
 	if err != nil {
@@ -44,20 +46,33 @@ func GetAllReports() []*excelize.File {
 
 // Функция разбора строки из XML файла
 func parseRow(row []string) models.Offer {
-	views, _ := strconv.Atoi(row[10])               // assuming column index for views is 10
-	favorite, _ := strconv.Atoi(row[16])            // assuming column index for favorite is 16
-	contacts, _ := strconv.Atoi(row[11])            // assuming column index for contacts is 11
-	promotion, _ := strconv.ParseFloat(row[13], 64) // assuming column index for promotion is 13
+
+	views, _ := strconv.Atoi(row[12])                 // Просмотры объявления
+	favorite, _ := strconv.Atoi(row[21])              // Добавлено в избранное
+	contacts, _ := strconv.Atoi(row[15])              // Контакты
+	promotion, _ := strconv.ParseFloat(row[30], 64)   // Затраты на продвижение
+	city := row[2]                                    // Город
+	category := row[4]                                // Категория
+	subCategory := row[5]                             // Подкатегория
+	name := row[7]                                    // Название
+	viewierCost, _ := strconv.ParseFloat(row[29], 64) // Затраты на просмотры
+	viewWithMessage, _ := strconv.Atoi(row[16])       // Написали в чат
+	lookPhone, _ := strconv.Atoi(row[17])             // Смотрели телефон
+	targetViewers, _ := strconv.Atoi(row[31])         // Целевые просмотры
 
 	return models.Offer{
-		City:        row[2], // assuming column index for city is 2
-		Category:    row[4], // assuming column index for category is 4
-		SubCategory: row[5], // assuming column index for subcategory is 5
-		Views:       views,
-		Favorite:    favorite,
-		Name:        row[7], // assuming column index for name is 7
-		Contacts:    contacts,
-		Promotion:   promotion,
+		City:            city,
+		Category:        category,
+		SubCategory:     subCategory,
+		Views:           views,
+		Favorite:        favorite,
+		Name:            name,
+		Contacts:        contacts,
+		Promotion:       promotion,
+		ViewersCost:     viewierCost,
+		ViewWithMessage: viewWithMessage,
+		LookPhone:       lookPhone,
+		TargetViewers:   targetViewers,
 	}
 }
 
@@ -73,6 +88,10 @@ func GetSimpleStatMap(offers []models.Offer) map[string]models.Stats {
 		stats.Favorite += offer.Favorite
 		stats.Promotion += offer.Promotion
 		stats.Views += offer.Views
+		stats.LookPhone += offer.LookPhone
+		stats.TargetViewers += offer.TargetViewers
+		stats.ViewWithMessage += offer.ViewWithMessage
+		stats.ViewersCost += offer.ViewersCost
 		result[offer.City] = stats
 	}
 	return result
@@ -90,9 +109,13 @@ func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 			Favorite:        stat.Favorite,
 			Contacts:        stat.Contacts,
 			Promotion:       stat.Promotion,
+			ViewersCost:     stat.ViewersCost,
 			PKConversion:    canDivByZero(float64(stat.Contacts), float64(stat.Views)) * 100,
-			AvgViewPrice:    canDivByZero(stat.Promotion, float64(stat.Views)),
-			AvgContactPrice: canDivByZero(stat.Promotion, float64(stat.Contacts)),
+			AvgViewPrice:    canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Views)),
+			AvgContactPrice: canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Contacts)),
+			TargetViewers:   stat.TargetViewers,
+			ViewWithMessage: stat.ViewWithMessage,
+			LookPhone:       stat.LookPhone,
 		}
 		result = append(result, resultStat)
 	}
@@ -119,7 +142,20 @@ func SaveResultStats(resultStatsMap map[string][]models.ResultStats) {
 	}()
 
 	// Создаем заголовки на русском языке
-	headers := []string{"Город", "Просмотры", "Избранное", "Контакты", "Продвижение", "PK Конверсия", "Средняя цена просмотра", "Средняя цена контакта"}
+	headers := []string{
+		"Город",
+		"Просмотры",
+		"Контакты",
+		"Избранное",
+		"Продвижение",
+		"PK Конверсия",
+		"Затраты на просмотры",
+		"Целевые просмотры",
+		"Написали в чат",
+		"Смотрели телефон",
+		"Средняя цена просмотра",
+		"Средняя цена контакта",
+	}
 
 	for sheetName, stats := range resultStatsMap {
 		if file.SheetCount > 1 {
@@ -150,15 +186,23 @@ func SaveResultStats(resultStatsMap map[string][]models.ResultStats) {
 			col++
 			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Views)
 			col++
-			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Favorite)
-			col++
 			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Contacts)
+			col++
+			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Favorite)
 			col++
 			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Promotion)
 			col++
 			pkConvValue := fmt.Sprintf("%.2f", stat.PKConversion)
 			pkConvValue += "%"
 			file.SetCellValue(corrSheetName, getCellName(col, row), pkConvValue)
+			col++
+			file.SetCellValue(corrSheetName, getCellName(col, row), stat.ViewersCost)
+			col++
+			file.SetCellValue(corrSheetName, getCellName(col, row), stat.TargetViewers)
+			col++
+			file.SetCellValue(corrSheetName, getCellName(col, row), stat.ViewWithMessage)
+			col++
+			file.SetCellValue(corrSheetName, getCellName(col, row), stat.LookPhone)
 			col++
 			avgViewPrice := fmt.Sprintf("%.2f", stat.AvgViewPrice)
 			file.SetCellValue(corrSheetName, getCellName(col, row), avgViewPrice)
