@@ -58,7 +58,7 @@ func parseRow(row []string) models.Offer {
 	viewierCost, _ := strconv.ParseFloat(row[29], 64) // Затраты на просмотры
 	viewWithMessage, _ := strconv.Atoi(row[16])       // Написали в чат
 	lookPhone, _ := strconv.Atoi(row[17])             // Смотрели телефон
-	targetViewers, _ := strconv.Atoi(row[31])         // Целевые просмотры
+	targetViewers, _ := strconv.Atoi(row[33])         // Целевые просмотры
 
 	return models.Offer{
 		City:            city,
