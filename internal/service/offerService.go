@@ -3,12 +3,13 @@ package service
 import (
 	models "avito-easy-report/internal/struct"
 	"fmt"
+	"github.com/xuri/excelize/v2"
 	"log"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
-
-	"github.com/xuri/excelize/v2"
+	"strings"
 )
 
 // Функция для получения всех объявлений из Excel
@@ -17,8 +18,9 @@ import (
 func GetAllOffers(report *excelize.File) []models.Offer {
 	var result []models.Offer
 	rows, _ := report.GetRows("Sheet1")
-	for _, row := range rows {
-		nextOffer := parseRow(row)
+	var columnIndexMap = GetColumnIndexMap(rows[0])
+	for _, row := range rows[1:] {
+		nextOffer := parseRow(row, columnIndexMap)
 		result = append(result, nextOffer)
 	}
 	return result
@@ -44,36 +46,61 @@ func GetAllReports() []*excelize.File {
 	return result
 }
 
-// Функция разбора строки из XML файла
-func parseRow(row []string) models.Offer {
-
-	views, _ := strconv.Atoi(row[12])                 // Просмотры объявления
-	favorite, _ := strconv.Atoi(row[21])              // Добавлено в избранное
-	contacts, _ := strconv.Atoi(row[15])              // Контакты
-	promotion, _ := strconv.ParseFloat(row[30], 64)   // Затраты на продвижение
-	city := row[2]                                    // Город
-	category := row[4]                                // Категория
-	subCategory := row[5]                             // Подкатегория
-	name := row[7]                                    // Название
-	viewierCost, _ := strconv.ParseFloat(row[29], 64) // Затраты на просмотры
-	viewWithMessage, _ := strconv.Atoi(row[16])       // Написали в чат
-	lookPhone, _ := strconv.Atoi(row[17])             // Смотрели телефон
-	targetViewers, _ := strconv.Atoi(row[33])         // Целевые просмотры
-
+// Функция разбора строки из XLSX файла
+func parseRow(row []string, columnIndex map[string]int) models.Offer {
 	return models.Offer{
-		City:            city,
-		Category:        category,
-		SubCategory:     subCategory,
-		Views:           views,
-		Favorite:        favorite,
-		Name:            name,
-		Contacts:        contacts,
-		Promotion:       promotion,
-		ViewersCost:     viewierCost,
-		ViewWithMessage: viewWithMessage,
-		LookPhone:       lookPhone,
-		TargetViewers:   targetViewers,
+		City:            row[columnIndex["city"]],
+		Category:        row[columnIndex["category"]],
+		SubCategory:     row[columnIndex["subCategory"]],
+		Views:           GetIntegerCell(row[columnIndex["views"]]),
+		Favorite:        GetIntegerCell(row[columnIndex["favorite"]]),
+		Name:            row[columnIndex["name"]],
+		Contacts:        GetIntegerCell(row[columnIndex["contacts"]]),
+		Promotion:       GetDoubleCell(row[columnIndex["promotion"]]),
+		ViewersCost:     GetDoubleCell(row[columnIndex["viewierCost"]]),
+		ViewWithMessage: GetIntegerCell(row[columnIndex["viewWithMessage"]]),
+		LookPhone:       GetIntegerCell(row[columnIndex["lookPhone"]]),
+		TargetViewers:   GetIntegerCell(row[columnIndex["targetViewers"]]),
 	}
+}
+
+func GetDoubleCell(cell string) float64 {
+	result, _ := strconv.ParseFloat(cell, 64)
+	return result
+}
+
+func GetIntegerCell(cell string) int {
+	result, _ := strconv.Atoi(cell)
+	return result
+}
+
+func GetColumnIndexMap(row []string) map[string]int {
+	columnIndex := make(map[string]int)
+
+	columnIndex["city"] = FindColumnIndex(row, []string{"Город"})
+	columnIndex["category"] = FindColumnIndex(row, []string{"Категория"})
+	columnIndex["subCategory"] = FindColumnIndex(row, []string{"Подкатегория"})
+	columnIndex["views"] = FindColumnIndex(row, []string{"Просмотры"})
+	columnIndex["favorite"] = FindColumnIndex(row, []string{"Добавили в избранное"})
+	columnIndex["name"] = FindColumnIndex(row, []string{"Название объявления"})
+	columnIndex["contacts"] = FindColumnIndex(row, []string{"Контакты"})
+	columnIndex["promotion"] = FindColumnIndex(row, []string{"Расходы на продвижение"})
+	columnIndex["viewierCost"] = FindColumnIndex(row, []string{"Расходы на размещение и целевые действия"})
+	columnIndex["viewWithMessage"] = FindColumnIndex(row, []string{"Написали в чат"})
+	columnIndex["lookPhone"] = FindColumnIndex(row, []string{"Посмотрели телефон"})
+	columnIndex["targetViewers"] = FindColumnIndex(row, []string{"Целевые просмотры"})
+
+	return columnIndex
+}
+
+func FindColumnIndex(row []string, columnNames []string) int {
+	for i, cell := range row {
+		if slices.Contains(columnNames, cell) {
+			return i
+		}
+	}
+	println("Не найдено совпадений для колонок: " + strings.Join(columnNames, ", "))
+	return -1
 }
 
 // Функция для отбора статистики из данных по объявлениям.

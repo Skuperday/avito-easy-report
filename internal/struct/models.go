@@ -7,7 +7,7 @@ type Offer struct {
 	SubCategory     string  // Подкатегория
 	Views           int     // Просмотры
 	Favorite        int     // Избранное
-	Name            string  // Ф	Название
+	Name            string  // Название
 	Contacts        int     // Контакты
 	Promotion       float64 // Цена продвижения
 	ViewersCost     float64 // Затраты на просмотры
