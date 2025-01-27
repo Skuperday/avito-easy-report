@@ -3,10 +3,15 @@ package main
 import (
 	"avito-easy-report/internal/service"
 	models "avito-easy-report/internal/struct"
+	"bufio"
+	"fmt"
+	"os"
 	"path/filepath"
 )
 
 func main() {
+	input := bufio.NewScanner(os.Stdin)
+	defer input.Scan()
 	reports := service.GetAllReports()
 	resultsFileName := make(map[string][]models.ResultStats)
 
@@ -17,6 +22,7 @@ func main() {
 		resultsFileName[fileName] = service.GetResultStats(stats)
 	}
 	service.SaveResultStats(resultsFileName)
+	fmt.Println("Готово")
 }
 
 // Конверсия просмотры-контакты

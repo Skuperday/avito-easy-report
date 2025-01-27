@@ -88,7 +88,7 @@ func GetColumnIndexMap(row []string) map[string]int {
 	columnIndex["viewierCost"] = FindColumnIndex(row, []string{"Расходы на размещение и целевые действия"})
 	columnIndex["viewWithMessage"] = FindColumnIndex(row, []string{"Написали в чат"})
 	columnIndex["lookPhone"] = FindColumnIndex(row, []string{"Посмотрели телефон"})
-	columnIndex["targetViewers"] = FindColumnIndex(row, []string{"Целевые просмотры"})
+	columnIndex["targetViewers"] = FindColumnIndex(row, []string{"Целевые просмотры", "Целевые отклики"})
 
 	return columnIndex
 }
