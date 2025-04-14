@@ -3,13 +3,14 @@ package service
 import (
 	models "avito-easy-report/internal/struct"
 	"fmt"
-	"github.com/xuri/excelize/v2"
 	"log"
 	"os"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/xuri/excelize/v2"
 )
 
 // Функция для получения всех объявлений из Excel
@@ -52,6 +53,7 @@ func parseRow(row []string, columnIndex map[string]int) models.Offer {
 		City:            row[columnIndex["city"]],
 		Category:        row[columnIndex["category"]],
 		SubCategory:     row[columnIndex["subCategory"]],
+		Shows:           GetIntegerCell(row[columnIndex["shows"]]),
 		Views:           GetIntegerCell(row[columnIndex["views"]]),
 		Favorite:        GetIntegerCell(row[columnIndex["favorite"]]),
 		Name:            row[columnIndex["name"]],
@@ -80,6 +82,7 @@ func GetColumnIndexMap(row []string) map[string]int {
 	columnIndex["city"] = FindColumnIndex(row, []string{"Город"})
 	columnIndex["category"] = FindColumnIndex(row, []string{"Категория"})
 	columnIndex["subCategory"] = FindColumnIndex(row, []string{"Подкатегория"})
+	columnIndex["shows"] = FindColumnIndex(row, []string{"Показы"})
 	columnIndex["views"] = FindColumnIndex(row, []string{"Просмотры"})
 	columnIndex["favorite"] = FindColumnIndex(row, []string{"Добавили в избранное"})
 	columnIndex["name"] = FindColumnIndex(row, []string{"Название объявления"})
@@ -115,6 +118,7 @@ func GetSimpleStatMap(offers []models.Offer) map[string]models.Stats {
 		stats.Favorite += offer.Favorite
 		stats.Promotion += offer.Promotion
 		stats.Views += offer.Views
+		stats.Shows += offer.Shows
 		stats.LookPhone += offer.LookPhone
 		stats.TargetViewers += offer.TargetViewers
 		stats.ViewWithMessage += offer.ViewWithMessage
@@ -134,9 +138,11 @@ func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 			City:            city,
 			Views:           stat.Views,
 			Favorite:        stat.Favorite,
+			Shows:           stat.Shows,
 			Contacts:        stat.Contacts,
 			Promotion:       stat.Promotion,
 			ViewersCost:     stat.ViewersCost,
+			PPConversion:    canDivByZero(float64(stat.Views), float64(stat.Shows)) * 100,
 			PKConversion:    canDivByZero(float64(stat.Contacts), float64(stat.Views)) * 100,
 			AvgViewPrice:    canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Views)),
 			AvgContactPrice: canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Contacts)),
@@ -171,11 +177,13 @@ func SaveResultStats(resultStatsMap map[string][]models.ResultStats) {
 	// Создаем заголовки на русском языке
 	headers := []string{
 		"Город",
+		"Показы",
 		"Просмотры",
 		"Контакты",
+		"ПП Конверсия",
+		"ПК Конверсия",
 		"Избранное",
 		"Продвижение",
-		"PK Конверсия",
 		"Затраты на просмотры",
 		"Целевые просмотры",
 		"Написали в чат",
@@ -211,17 +219,23 @@ func SaveResultStats(resultStatsMap map[string][]models.ResultStats) {
 			row := i + 2 // Начальная строка
 			file.SetCellValue(corrSheetName, getCellName(col, row), stat.City)
 			col++
+			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Shows)
+			col++
 			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Views)
 			col++
 			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Contacts)
 			col++
-			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Favorite)
-			col++
-			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Promotion)
+			ppConvValue := fmt.Sprintf("%.2f", stat.PPConversion)
+			ppConvValue += "%"
+			file.SetCellValue(corrSheetName, getCellName(col, row), ppConvValue)
 			col++
 			pkConvValue := fmt.Sprintf("%.2f", stat.PKConversion)
 			pkConvValue += "%"
 			file.SetCellValue(corrSheetName, getCellName(col, row), pkConvValue)
+			col++
+			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Favorite)
+			col++
+			file.SetCellValue(corrSheetName, getCellName(col, row), stat.Promotion)
 			col++
 			file.SetCellValue(corrSheetName, getCellName(col, row), stat.ViewersCost)
 			col++

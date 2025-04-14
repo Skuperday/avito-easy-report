@@ -6,6 +6,7 @@ type Offer struct {
 	Category        string  // Категория
 	SubCategory     string  // Подкатегория
 	Views           int     // Просмотры
+	Shows           int     // Показы
 	Favorite        int     // Избранное
 	Name            string  // Название
 	Contacts        int     // Контакты
@@ -19,6 +20,7 @@ type Offer struct {
 // Статистика
 type Stats struct {
 	Views           int     // Просмотры
+	Shows           int     // Показы
 	Favorite        int     // Избранное
 	Contacts        int     // Контакты
 	Promotion       float64 // Цена продвижения
@@ -32,9 +34,11 @@ type Stats struct {
 type ResultStats struct {
 	City            string  // Город
 	Views           int     // Просмотры
+	Shows           int     // Показы
 	Favorite        int     // Избранное
 	Contacts        int     // Контакты
 	Promotion       float64 // Затрачено средств
+	PPConversion    float64 // Конверсия показы-просмотры
 	PKConversion    float64 // Конверсия просмотры-контакты
 	ViewersCost     float64 // Затраты на просмотры
 	TargetViewers   int     // Целевые просмотры
