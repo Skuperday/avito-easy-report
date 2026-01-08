@@ -103,7 +103,7 @@ func FindColumnIndex(row []string, columnNames []string) int {
 		}
 	}
 	println("Не найдено совпадений для колонок: " + strings.Join(columnNames, ", "))
-	return -1
+	return 29
 }
 
 // Функция для отбора статистики из данных по объявлениям.
