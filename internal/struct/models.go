@@ -1,49 +1,77 @@
 package models
 
-// Объявление
+// Offer — сырое объявление из отчёта Avito
 type Offer struct {
-	City            string  // Город объявления
-	Category        string  // Категория
-	SubCategory     string  // Подкатегория
-	Views           int     // Просмотры
-	Shows           int     // Показы
-	Favorite        int     // Избранное
-	Name            string  // Название
-	Contacts        int     // Контакты
-	Promotion       float64 // Цена продвижения
-	ViewersCost     float64 // Затраты на просмотры
-	ViewWithMessage int     // Написали в чат
-	LookPhone       int     // Смотрели телефон
-	TargetViewers   int     // Целевые просмотры
+	City            string  `json:"city"`
+	Category        string  `json:"category"`
+	SubCategory     string  `json:"subCategory"`
+	Views           int     `json:"views"`
+	Shows           int     `json:"shows"`
+	Favorite        int     `json:"favorite"`
+	Name            string  `json:"name"`
+	Contacts        int     `json:"contacts"`
+	Promotion       float64 `json:"promotion"`
+	ViewersCost     float64 `json:"viewersCost"`
+	ViewWithMessage int     `json:"viewWithMessage"`
+	LookPhone       int     `json:"lookPhone"`
+	TargetViewers   int     `json:"targetViewers"`
 }
 
-// Статистика
+// Stats — агрегированная статистика по городу
 type Stats struct {
-	Views           int     // Просмотры
-	Shows           int     // Показы
-	Favorite        int     // Избранное
-	Contacts        int     // Контакты
-	Promotion       float64 // Цена продвижения
-	ViewWithMessage int     // Написали в чат
-	LookPhone       int     // Смотрели телефон
-	TargetViewers   int     // Целевые просмотры
-	ViewersCost     float64 // Затраты на просмотры
+	Views           int     `json:"views"`
+	Shows           int     `json:"shows"`
+	Favorite        int     `json:"favorite"`
+	Contacts        int     `json:"contacts"`
+	Promotion       float64 `json:"promotion"`
+	ViewWithMessage int     `json:"viewWithMessage"`
+	LookPhone       int     `json:"lookPhone"`
+	TargetViewers   int     `json:"targetViewers"`
+	ViewersCost     float64 `json:"viewersCost"`
 }
 
-// Результат по статистике
+// ResultStats — финальная строка результата (на фронтенд)
 type ResultStats struct {
-	City            string  // Город
-	Views           int     // Просмотры
-	Shows           int     // Показы
-	Favorite        int     // Избранное
-	Contacts        int     // Контакты
-	Promotion       float64 // Затрачено средств
-	PPConversion    float64 // Конверсия показы-просмотры
-	PKConversion    float64 // Конверсия просмотры-контакты
-	ViewersCost     float64 // Затраты на просмотры
-	TargetViewers   int     // Целевые просмотры
-	ViewWithMessage int     // Написали в чат
-	LookPhone       int     // Смотрели телефон
-	AvgViewPrice    float64 // Ср. цена просмотра
-	AvgContactPrice float64 // Ср. цена контакта
+	City            string  `json:"city"`
+	Views           int     `json:"views"`
+	Shows           int     `json:"shows"`
+	Favorite        int     `json:"favorite"`
+	Contacts        int     `json:"contacts"`
+	Promotion       float64 `json:"promotion"`
+	ViewersCost     float64 `json:"viewersCost"`
+	TargetViewers   int     `json:"targetViewers"`
+	ViewWithMessage int     `json:"viewWithMessage"`
+	LookPhone       int     `json:"lookPhone"`
+	PPConversion    float64 `json:"ppConversion"`
+	PKConversion    float64 `json:"pkConversion"`
+	AvgViewPrice    float64 `json:"avgViewPrice"`
+	AvgContactPrice float64 `json:"avgContactPrice"`
+}
+
+// --- API-структуры ---
+
+// UploadResponse — ответ на загрузку отчёта
+type UploadResponse struct {
+	ID       string   `json:"id"`
+	FileName string   `json:"fileName"`
+	Rows     int      `json:"rows"`
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+// ReportInfo — краткая информация об отчёте
+type ReportInfo struct {
+	ID       string `json:"id"`
+	FileName string `json:"fileName"`
+}
+
+// StatsResponse — ответ со статистикой по городам
+type StatsResponse struct {
+	ReportID string        `json:"reportId"`
+	FileName string        `json:"fileName"`
+	Stats    []ResultStats `json:"stats"`
+}
+
+// MultiStatsResponse — сводная статистика по нескольким отчётам
+type MultiStatsResponse struct {
+	Reports []StatsResponse `json:"reports"`
 }

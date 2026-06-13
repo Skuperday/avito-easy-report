@@ -1,2 +1,16 @@
-reports/*
-!reports/.gitkeep
+# Бинарники
+avito-easy-server
+
+# БД
+data/
+*.db
+
+# Docker
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
