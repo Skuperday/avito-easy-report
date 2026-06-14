@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"slices"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/xuri/excelize/v2"
@@ -99,12 +99,16 @@ func ParseReport(reader io.Reader, fileName string) ([]models.Offer, *excelize.F
 	return offers, f, warnings, nil
 }
 
-// GetSimpleStatMap агрегирует объявления по городам
-func GetSimpleStatMap(offers []models.Offer) map[string]models.Stats {
+// GetGroupedStats агрегирует объявления по указанному ключу (city/category/name)
+func GetGroupedStats(offers []models.Offer, groupBy string) map[string]models.Stats {
 	result := make(map[string]models.Stats)
 
 	for _, offer := range offers {
-		stats := result[offer.City]
+		key := groupKey(offer, groupBy)
+		if key == "" {
+			continue
+		}
+		stats := result[key]
 		stats.Contacts += offer.Contacts
 		stats.Favorite += offer.Favorite
 		stats.Promotion += offer.Promotion
@@ -114,17 +118,29 @@ func GetSimpleStatMap(offers []models.Offer) map[string]models.Stats {
 		stats.TargetViewers += offer.TargetViewers
 		stats.ViewWithMessage += offer.ViewWithMessage
 		stats.ViewersCost += offer.ViewersCost
-		result[offer.City] = stats
+		stats.Response += offer.Response
+		result[key] = stats
 	}
 	return result
+}
+
+func groupKey(o models.Offer, groupBy string) string {
+	switch groupBy {
+	case "category":
+		return o.Category
+	case "name":
+		return o.Name
+	default:
+		return o.City
+	}
 }
 
 // GetResultStats вычисляет производные метрики
 func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 	result := make([]models.ResultStats, 0, len(stats))
-	for city, stat := range stats {
+	for key, stat := range stats {
 		resultStat := models.ResultStats{
-			City:            city,
+			Key:             key,
 			Views:           stat.Views,
 			Favorite:        stat.Favorite,
 			Shows:           stat.Shows,
@@ -138,6 +154,7 @@ func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 			TargetViewers:   stat.TargetViewers,
 			ViewWithMessage: stat.ViewWithMessage,
 			LookPhone:       stat.LookPhone,
+			Response:        stat.Response,
 		}
 		result = append(result, resultStat)
 	}
@@ -167,7 +184,7 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 	}
 
 	for i, report := range reports {
-		stats := GetSimpleStatMap(report.Offers)
+		stats := GetGroupedStats(report.Offers, "city")
 		resultStats := GetResultStats(stats)
 		sheetName := keepNumbersAndUnderscores(report.FileName)
 
@@ -193,7 +210,7 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 
 		for rowIdx, stat := range resultStats {
 			row := rowIdx + 2
-			_ = file.SetCellValue(sheetName, getCellName(1, row), stat.City)
+			_ = file.SetCellValue(sheetName, getCellName(1, row), stat.Key)
 			_ = file.SetCellValue(sheetName, getCellName(2, row), stat.Shows)
 			_ = file.SetCellValue(sheetName, getCellName(3, row), stat.Views)
 			_ = file.SetCellValue(sheetName, getCellName(4, row), stat.Contacts)
@@ -230,6 +247,7 @@ func parseRow(row []string, columnIndex map[string]int) models.Offer {
 		ViewWithMessage: getIntegerCell(safeGet(row, columnIndex["viewWithMessage"])),
 		LookPhone:       getIntegerCell(safeGet(row, columnIndex["lookPhone"])),
 		TargetViewers:   getIntegerCell(safeGet(row, columnIndex["targetViewers"])),
+		Response:        getIntegerCell(safeGet(row, columnIndex["response"])),
 	}
 }
 
@@ -251,14 +269,15 @@ func getColumnIndexMap(row []string) (map[string]int, []string) {
 		"subCategory":     {"Подкатегория"},
 		"shows":           {"Показы"},
 		"views":           {"Просмотры"},
-		"favorite":        {"Добавили в избранное"},
-		"name":            {"Название объявления"},
-		"contacts":        {"Контакты"},
-		"promotion":       {"Расходы на продвижение"},
-		"viewierCost":     {"Расходы на размещение и целевые действия"},
-		"viewWithMessage": {"Написали в чат"},
-		"lookPhone":       {"Посмотрели телефон"},
-		"targetViewers":   {"Целевые просмотры", "Целевые отклики"},
+		"favorite":        {"Добавили в избранное", "Добавили в\u00a0избранное"},
+		"name":            {"Название объявления", "Параметр"},
+		"contacts":        {"Контакты", "Отклики"},
+		"promotion":       {"Расходы на продвижение", "Расходы на\u00a0продвижение"},
+		"viewierCost":     {"Расходы на размещение и целевые действия", "Расходы на\u00a0размещение и\u00a0целевые\u00a0действия", "Расходы на объявления", "Расходы на\u00a0объявления"},
+		"viewWithMessage": {"Написали в чат", "Написали в\u00a0чат"},
+		"lookPhone":       {"Посмотрели телефон", "Посмотрели\u00a0телефон"},
+		"targetViewers":   {"Целевые просмотры", "Целевые отклики", "Откликнулись на скидку в чате", "Откликнулись на\u00a0скидку в\u00a0чате"},
+		"response":        {"Отклики"},
 	}
 
 	for key, names := range mappings {
@@ -274,8 +293,12 @@ func getColumnIndexMap(row []string) (map[string]int, []string) {
 
 func findColumnIndex(row []string, columnNames []string) int {
 	for i, cell := range row {
-		if slices.Contains(columnNames, cell) {
-			return i
+		cellClean := strings.ReplaceAll(cell, "\u00a0", " ")
+		for _, name := range columnNames {
+			nameClean := strings.ReplaceAll(name, "\u00a0", " ")
+			if cellClean == nameClean {
+				return i
+			}
 		}
 	}
 	return -1
@@ -306,4 +329,123 @@ func getCellName(col int, row int) string {
 func keepNumbersAndUnderscores(input string) string {
 	re := regexp.MustCompile(`[^0-9_]`)
 	return re.ReplaceAllString(input, "")
+}
+
+// GetSummary строит краткую сводку: топ-5 объявлений, заголовков, городов
+func GetSummary(offers []models.Offer) models.StatsSummary {
+	shows, views, contacts := 0, 0, 0
+	offerContacts := make(map[string]int)
+	titleContacts := make(map[string]int)
+	cityContacts := make(map[string]int)
+
+	for _, o := range offers {
+		shows += o.Shows
+		views += o.Views
+		contacts += o.Contacts
+		offerContacts[o.Name] += o.Contacts
+		titleContacts[o.Name] += o.Contacts
+		cityContacts[o.City] += o.Contacts
+	}
+
+	return models.StatsSummary{
+		TotalShows:    shows,
+		TotalViews:    views,
+		TotalContacts: contacts,
+		TopOffers:     topN(offerContacts, 5),
+		TopTitles:     topN(titleContacts, 5),
+		TopCities:     topN(cityContacts, 5),
+	}
+}
+
+func topN(m map[string]int, n int) []models.TopItem {
+	type kv struct {
+		k string
+		v int
+	}
+	list := make([]kv, 0, len(m))
+	for k, v := range m {
+		list = append(list, kv{k, v})
+	}
+	// Сортировка по убыванию
+	for i := 0; i < len(list); i++ {
+		for j := i + 1; j < len(list); j++ {
+			if list[j].v > list[i].v {
+				list[i], list[j] = list[j], list[i]
+			}
+		}
+	}
+	if n > len(list) {
+		n = len(list)
+	}
+	result := make([]models.TopItem, n)
+	for i := 0; i < n; i++ {
+		result[i] = models.TopItem{Name: list[i].k, Value: list[i].v}
+	}
+	return result
+}
+
+// ComparePeriods сравнивает два периода и возвращает дельту
+func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareResponse {
+	earlyStats := GetGroupedStats(early, groupBy)
+	lateStats := GetGroupedStats(late, groupBy)
+	earlyResult := GetResultStats(earlyStats)
+	lateResult := GetResultStats(lateStats)
+
+	// Считаем дельту: проходим по позднему периоду, ищем соответствие в раннем
+	earlyMap := make(map[string]models.ResultStats)
+	for _, s := range earlyResult {
+		earlyMap[s.Key] = s
+	}
+
+	delta := make([]models.ResultStats, 0, len(lateResult))
+	for _, s := range lateResult {
+		e, ok := earlyMap[s.Key]
+		if !ok {
+			// Новый город/категория — вся статистика как прирост
+			delta = append(delta, models.ResultStats{
+				Key: s.Key, Shows: s.Shows, Views: s.Views, Contacts: s.Contacts,
+				PPConversion: s.PPConversion, PKConversion: s.PKConversion,
+				AvgViewPrice: s.AvgViewPrice, AvgContactPrice: s.AvgContactPrice,
+			})
+			continue
+		}
+		delta = append(delta, models.ResultStats{
+			Key:             s.Key,
+			Shows:           s.Shows - e.Shows,
+			Views:           s.Views - e.Views,
+			Contacts:        s.Contacts - e.Contacts,
+			Favorite:        s.Favorite - e.Favorite,
+			Promotion:       s.Promotion - e.Promotion,
+			ViewersCost:     s.ViewersCost - e.ViewersCost,
+			TargetViewers:   s.TargetViewers - e.TargetViewers,
+			ViewWithMessage: s.ViewWithMessage - e.ViewWithMessage,
+			LookPhone:       s.LookPhone - e.LookPhone,
+			PPConversion:    s.PPConversion - e.PPConversion,
+			PKConversion:    s.PKConversion - e.PKConversion,
+			AvgViewPrice:    s.AvgViewPrice - e.AvgViewPrice,
+			AvgContactPrice: s.AvgContactPrice - e.AvgContactPrice,
+		})
+	}
+
+	// Перестраиваем earlyResult в том же порядке что и delta (по ключам lateResult)
+	syncedEarly := make([]models.ResultStats, 0, len(delta))
+	for _, s := range delta {
+		if e, ok := earlyMap[s.Key]; ok {
+			syncedEarly = append(syncedEarly, e)
+		} else {
+			syncedEarly = append(syncedEarly, models.ResultStats{Key: s.Key})
+		}
+	}
+
+	return models.CompareResponse{
+		Early: models.PeriodStats{
+			Summary: GetSummary(early),
+			Stats:   syncedEarly,
+		},
+		Late: models.PeriodStats{
+			Summary: GetSummary(late),
+			Stats:   lateResult,
+		},
+		Delta: delta,
+	}
 }

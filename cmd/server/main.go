@@ -101,6 +101,7 @@ func setupRouter(cfg *config.Config, reportHandler *handler.Handler, authHandler
 		protected.POST("/upload", reportHandler.UploadReport)
 		protected.GET("/reports", reportHandler.ListReports)
 		protected.GET("/reports/multi", reportHandler.MultiStats)
+		protected.GET("/reports/compare", reportHandler.CompareReports)
 		protected.GET("/reports/:id/stats", reportHandler.GetStats)
 		protected.DELETE("/reports/:id", reportHandler.DeleteReport)
 		protected.GET("/export", reportHandler.ExportAll)

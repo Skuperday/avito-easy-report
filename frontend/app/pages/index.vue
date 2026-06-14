@@ -1,5 +1,14 @@
 <template>
   <div>
+    <!-- Выбор типа отчёта -->
+    <div class="flex items-center gap-3 mb-4">
+      <span class="text-sm muted">Тип отчёта:</span>
+      <select v-model="reportType" class="theme-select">
+        <option value="avito">🏷 Avito (объявления)</option>
+        <option value="hr">💼 HR (вакансии)</option>
+      </select>
+    </div>
+
     <!-- Drop zone -->
     <div
       class="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition hover:opacity-90 mb-4"
@@ -16,33 +25,39 @@
       <input ref="fileInput" type="file" accept=".xlsx" multiple class="hidden" @change="handleFileSelect" />
     </div>
 
-    <!-- Статус -->
-    <div v-if="uploadStatus" class="rounded-xl border p-3 text-sm whitespace-pre-wrap mb-4" :class="uploadStatus.type === 'success' ? 'border-green-500/30 bg-green-500/10 text-green-200' : 'border-red-500/30 bg-red-500/10 text-red-200'">
-      {{ uploadStatus.text }}
-    </div>
-
-    <!-- Список отчётов с чекбоксами -->
+    <!-- Список отчётов -->
     <div v-if="reports.length > 0" class="grid gap-2 mb-4">
-      <div
-        v-for="r in reports" :key="r.id"
+      <div class="flex gap-2 mb-1" v-if="checked.size > 0">
+        <button class="btn destructive text-sm" @click="deleteSelected">Удалить выбранные ({{ checked.size }})</button>
+        <button class="btn secondary text-sm" @click="checked = new Set(); checked = new Set()">Снять выделение</button>
+      </div>
+      <div v-for="r in reports" :key="r.id"
         class="flex items-center gap-3 rounded-xl border p-3 text-sm"
         :style="{ borderColor: checked.has(r.id) ? 'var(--ring)' : 'var(--border)' }"
-        :class="checked.has(r.id) ? 'bg-accent' : ''"
-      >
+        :class="checked.has(r.id) ? 'bg-accent' : ''">
         <input type="checkbox" :checked="checked.has(r.id)" @change="toggleCheck(r.id)" class="w-4 h-4 accent-indigo-500" />
-        <div class="flex-1 min-w-0">
-          <div class="font-bold truncate">{{ r.fileName }}</div>
-          <div class="muted text-xs">{{ r.id.slice(0, 8) }}...</div>
-        </div>
-        <button @click="deleteReport(r.id)" class="text-xs font-medium hover:underline" style="color: var(--destructive)">Удалить</button>
+        <div class="flex-1 min-w-0"><div class="font-bold truncate">{{ r.fileName }}</div><div class="muted text-xs">{{ r.id.slice(0, 8) }}...</div></div>
+        <button @click="deleteSingle(r.id)" class="text-xs font-medium hover:underline" style="color: var(--destructive)">Удалить</button>
       </div>
     </div>
     <div v-else class="text-center muted text-sm py-8">Нет загруженных отчётов</div>
 
-    <!-- Кнопки -->
     <div class="flex gap-3 justify-center pt-2">
-      <button class="btn" :disabled="checked.size === 0" @click="showResults">Показать результаты ({{ checked.size }})</button>
+      <button class="btn" :disabled="checked.size < 2" @click="compareReports">Сравнить ({{ checked.size }})</button>
+      <button class="btn secondary" :disabled="checked.size === 0" @click="showResults">Показать ({{ checked.size }})</button>
       <button v-if="reports.length > 0" class="btn secondary text-sm" @click="exportAll">Скачать XLSX</button>
+    </div>
+
+    <!-- Toast-уведомления (правый верхний угол) -->
+    <div class="fixed top-4 right-4 z-50 flex flex-col gap-2" style="max-width:360px">
+      <div v-for="(n, i) in toasts" :key="i"
+        class="rounded-xl border p-3 text-sm flex justify-between items-start gap-2 shadow-lg"
+        :class="n.type === 'success' ? 'border-green-500/30 bg-green-500/10 text-green-300' : n.type === 'error' ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-ring/30 bg-card text-foreground'"
+        :style="{ backdropFilter: 'blur(12px)', background: n.type === 'success' ? 'color-mix(in oklch, var(--chart-2) 12%, var(--card))' : n.type === 'error' ? 'color-mix(in oklch, var(--destructive) 12%, var(--card))' : 'var(--card)' }"
+      >
+        <span class="whitespace-pre-wrap">{{ n.text }}</span>
+        <button @click="toasts.splice(i, 1)" class="text-xs font-bold hover:opacity-70 ml-2 shrink-0 muted">✕</button>
+      </div>
     </div>
   </div>
 </template>
@@ -56,54 +71,51 @@ const fileInput = ref<HTMLInputElement>()
 const isDragging = ref(false)
 const reports = ref<{ id: string; fileName: string }[]>([])
 const checked = ref(new Set<string>())
-const uploadStatus = ref<{ type: string; text: string } | null>(null)
+const toasts = ref<{ type: string; text: string }[]>([])
+const reportType = ref('avito')
 
-const showStatus = (type: string, text: string) => {
-  uploadStatus.value = { type, text }
-  if (type === 'success') setTimeout(() => uploadStatus.value = null, 5000)
+const notify = (type: string, text: string) => {
+  toasts.value.push({ type, text })
+  setTimeout(() => { if (toasts.value.length > 0) toasts.value.shift() }, 8000)
 }
 
 const uploadFile = async (file: File) => {
   const formData = new FormData()
   formData.append('file', file)
-  showStatus('', `Загружаем ${file.name}...`)
+  formData.append('type', reportType.value)
+  notify('', `Загружаем ${file.name}...`)
   try {
     const res = await auth.apiFetch('/upload', { method: 'POST', body: formData, headers: {} })
     const data = await res.json()
     if (res.ok) {
       let msg = `✓ ${data.fileName} — ${data.rows} объявлений`
-      if (data.warnings && data.warnings.length > 0) msg += `\n⚠ ${data.warnings.join('\n⚠ ')}`
-      showStatus('success', msg)
+      if (data.warnings?.length) msg += `\n⚠ ${data.warnings.join('\n⚠ ')}`
+      notify('success', msg)
       await refreshReports()
-    } else { showStatus('error', `✗ ${data.error}`) }
-  } catch (e: any) { showStatus('error', e.message) }
+    } else { notify('error', `✗ ${data.error}`) }
+  } catch (e: any) { notify('error', e.message) }
 }
 
 const handleDrop = (e: DragEvent) => { isDragging.value = false; if (e.dataTransfer?.files) handleFiles(e.dataTransfer.files) }
 const handleFileSelect = (e: Event) => { const files = (e.target as HTMLInputElement).files; if (files) handleFiles(files) }
 const handleFiles = async (files: FileList) => { for (const f of files) { if (f.name.endsWith('.xlsx')) await uploadFile(f) } }
 const refreshReports = async () => { try { const r = await auth.apiFetch('/reports'); reports.value = await r.json() } catch {} }
+const toggleCheck = (id: string) => { checked.value.has(id) ? checked.value.delete(id) : checked.value.add(id); checked.value = new Set(checked.value) }
 
-const toggleCheck = (id: string) => {
-  if (checked.value.has(id)) checked.value.delete(id)
-  else checked.value.add(id)
-  checked.value = new Set(checked.value)
+const deleteSingle = async (id: string) => {
+  try { await auth.apiFetch(`/reports/${id}`, { method: 'DELETE' }); checked.value.delete(id); checked.value = new Set(checked.value); await refreshReports() } catch {}
+}
+const deleteSelected = async () => {
+  for (const id of checked.value) {
+    try { await auth.apiFetch(`/reports/${id}`, { method: 'DELETE' }) } catch {}
+  }
+  checked.value = new Set()
+  await refreshReports()
+  notify('success', `Удалено отчётов: ${checked.size || 'все выбранные'}`)
 }
 
-const deleteReport = async (id: string) => {
-  try {
-    await auth.apiFetch(`/reports/${id}`, { method: 'DELETE' })
-    checked.value.delete(id)
-    checked.value = new Set(checked.value)
-    await refreshReports()
-  } catch {}
-}
-
-const showResults = () => {
-  const ids = [...checked.value].join(',')
-  navigateTo(`/results?ids=${ids}`)
-}
-
+const showResults = () => navigateTo(`/results?ids=${[...checked.value].join(',')}`)
+const compareReports = () => navigateTo(`/results?ids=${[...checked.value].join(',')}&compare=1`)
 const exportAll = () => window.open(`${config.public.apiBase}/export?token=${auth.token.value}`, '_blank')
 onMounted(() => refreshReports())
 </script>

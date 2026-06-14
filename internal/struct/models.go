@@ -15,9 +15,10 @@ type Offer struct {
 	ViewWithMessage int     `json:"viewWithMessage"`
 	LookPhone       int     `json:"lookPhone"`
 	TargetViewers   int     `json:"targetViewers"`
+	Response        int     `json:"response"`
 }
 
-// Stats — агрегированная статистика по городу
+// Stats — агрегированная статистика по ключу группировки
 type Stats struct {
 	Views           int     `json:"views"`
 	Shows           int     `json:"shows"`
@@ -28,11 +29,12 @@ type Stats struct {
 	LookPhone       int     `json:"lookPhone"`
 	TargetViewers   int     `json:"targetViewers"`
 	ViewersCost     float64 `json:"viewersCost"`
+	Response        int     `json:"response"`
 }
 
-// ResultStats — финальная строка результата (на фронтенд)
+// ResultStats — строка результата с группировкой
 type ResultStats struct {
-	City            string  `json:"city"`
+	Key             string  `json:"key"`
 	Views           int     `json:"views"`
 	Shows           int     `json:"shows"`
 	Favorite        int     `json:"favorite"`
@@ -46,11 +48,40 @@ type ResultStats struct {
 	PKConversion    float64 `json:"pkConversion"`
 	AvgViewPrice    float64 `json:"avgViewPrice"`
 	AvgContactPrice float64 `json:"avgContactPrice"`
+	Response        int     `json:"response"`
+}
+
+// TopItem — элемент топ-N
+type TopItem struct {
+	Name  string `json:"name"`
+	Value int    `json:"value"`
+}
+
+// StatsSummary — краткая сводка
+type StatsSummary struct {
+	TotalShows    int       `json:"totalShows"`
+	TotalViews    int       `json:"totalViews"`
+	TotalContacts int       `json:"totalContacts"`
+	TopOffers     []TopItem `json:"topOffers"`
+	TopTitles     []TopItem `json:"topTitles"`
+	TopCities     []TopItem `json:"topCities"`
+}
+
+// PeriodStats — статистика периода
+type PeriodStats struct {
+	Summary StatsSummary  `json:"summary"`
+	Stats   []ResultStats `json:"stats"`
+}
+
+// CompareResponse — сравнение двух периодов
+type CompareResponse struct {
+	Early  PeriodStats   `json:"early"`
+	Late   PeriodStats   `json:"late"`
+	Delta  []ResultStats `json:"delta"`
 }
 
 // --- API-структуры ---
 
-// UploadResponse — ответ на загрузку отчёта
 type UploadResponse struct {
 	ID       string   `json:"id"`
 	FileName string   `json:"fileName"`
@@ -58,20 +89,18 @@ type UploadResponse struct {
 	Warnings []string `json:"warnings,omitempty"`
 }
 
-// ReportInfo — краткая информация об отчёте
 type ReportInfo struct {
 	ID       string `json:"id"`
 	FileName string `json:"fileName"`
 }
 
-// StatsResponse — ответ со статистикой по городам
 type StatsResponse struct {
 	ReportID string        `json:"reportId"`
 	FileName string        `json:"fileName"`
 	Stats    []ResultStats `json:"stats"`
+	Summary  StatsSummary  `json:"summary"`
 }
 
-// MultiStatsResponse — сводная статистика по нескольким отчётам
 type MultiStatsResponse struct {
 	Reports []StatsResponse `json:"reports"`
 }
