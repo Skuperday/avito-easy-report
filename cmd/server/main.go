@@ -33,10 +33,12 @@ func main() {
 	service.InitAuth(cfg)
 
 	store := service.NewReportStore()
+	cabinetStore := service.NewCabinetStore()
 	reportHandler := handler.NewHandler(store)
 	authHandler := handler.NewAuthHandler()
+	cabinetHandler := handler.NewCabinetHandler(cabinetStore, store)
 
-	r := setupRouter(cfg, reportHandler, authHandler)
+	r := setupRouter(cfg, reportHandler, authHandler, cabinetHandler)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
@@ -66,7 +68,7 @@ func main() {
 	log.Println("Сервер остановлен")
 }
 
-func setupRouter(cfg *config.Config, reportHandler *handler.Handler, authHandler *handler.AuthHandler) *gin.Engine {
+func setupRouter(cfg *config.Config, reportHandler *handler.Handler, authHandler *handler.AuthHandler, cabHandler *handler.CabinetHandler) *gin.Engine {
 	r := gin.Default()
 
 	// CORS
@@ -103,6 +105,12 @@ func setupRouter(cfg *config.Config, reportHandler *handler.Handler, authHandler
 		protected.GET("/reports/multi", reportHandler.MultiStats)
 		protected.GET("/reports/compare", reportHandler.CompareReports)
 		protected.GET("/reports/:id/stats", reportHandler.GetStats)
+
+		// Кабинеты
+		protected.GET("/cabinets", cabHandler.List)
+		protected.POST("/cabinets", cabHandler.Create)
+		protected.DELETE("/cabinets/:id", cabHandler.Delete)
+		protected.GET("/cabinets/:id/reports", cabHandler.ListReports)
 		protected.DELETE("/reports/:id", reportHandler.DeleteReport)
 		protected.GET("/export", reportHandler.ExportAll)
 

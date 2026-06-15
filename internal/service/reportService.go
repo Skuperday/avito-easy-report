@@ -22,6 +22,7 @@ type ReportStore struct {
 type StoredReport struct {
 	ID       string
 	FileName string
+	UserID   uint
 	Offers   []models.Offer
 	File     *excelize.File // оригинальный файл для экспорта
 }
@@ -47,13 +48,26 @@ func (s *ReportStore) Get(id string) *StoredReport {
 	return s.reports[id]
 }
 
-// List возвращает список всех отчётов
+// List возвращает список отчётов пользователя
 func (s *ReportStore) List() []StoredReport {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	result := make([]StoredReport, 0, len(s.reports))
 	for _, r := range s.reports {
 		result = append(result, *r)
+	}
+	return result
+}
+
+// ListByUser возвращает отчёты конкретного пользователя
+func (s *ReportStore) ListByUser(userID uint) []StoredReport {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]StoredReport, 0)
+	for _, r := range s.reports {
+		if r.UserID == userID {
+			result = append(result, *r)
+		}
 	}
 	return result
 }
@@ -129,7 +143,7 @@ func groupKey(o models.Offer, groupBy string) string {
 	case "category":
 		return o.Category
 	case "name":
-		return o.Name
+		return o.SubCategory
 	default:
 		return o.City
 	}

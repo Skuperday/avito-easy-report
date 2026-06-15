@@ -7,7 +7,7 @@
     <div v-if="!loading && !error" class="flex gap-2 mb-4">
       <button class="btn text-sm" :class="groupBy === 'city' ? '' : 'secondary'" @click="groupBy = 'city'; reload()">По городам</button>
       <button class="btn text-sm" :class="groupBy === 'category' ? '' : 'secondary'" @click="groupBy = 'category'; reload()">По категориям</button>
-      <button class="btn text-sm" :class="groupBy === 'name' ? '' : 'secondary'" @click="groupBy = 'name'; reload()">По заголовкам</button>
+      <button class="btn text-sm" :class="groupBy === 'name' ? '' : 'secondary'" @click="groupBy = 'name'; reload()">По подкатегориям</button>
     </div>
 
     <!-- Сравнение периодов -->

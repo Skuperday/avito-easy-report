@@ -15,6 +15,10 @@
             <span class="grid size-7 place-items-center rounded-lg bg-white/5 text-xs font-black uppercase">📊</span>
             <span class="min-w-0"><span class="block truncate">Отчёты</span></span>
           </NuxtLink>
+          <NuxtLink to="/cabinets" class="nav-link" :class="{ 'router-link-active': route.path.startsWith('/cabinets') }">
+            <span class="grid size-7 place-items-center rounded-lg bg-white/5 text-xs font-black uppercase">📁</span>
+            <span class="min-w-0"><span class="block truncate">Кабинеты</span></span>
+          </NuxtLink>
           <NuxtLink v-if="auth.isAdmin.value" to="/admin/users" class="nav-link" :class="{ 'router-link-active': route.path === '/admin/users' }">
             <span class="grid size-7 place-items-center rounded-lg bg-white/5 text-xs font-black uppercase">👥</span>
             <span class="min-w-0"><span class="block truncate">Пользователи</span></span>
@@ -34,13 +38,15 @@
     <main class="main-inset">
       <div class="content-frame">
         <header class="topbar justify-between" style="min-height:2.5rem;padding:0.4rem 1rem">
-          <span class="text-sm muted">{{ pageLabel }}</span>
-          <select class="theme-select" :value="theme" @change="setTheme(($event.target as HTMLSelectElement).value)">
+          <div class="flex items-center gap-2">
+            <span class="text-xs muted">v1.0.0</span>
+            <select class="theme-select" :value="theme" @change="setTheme(($event.target as HTMLSelectElement).value)">
             <option value="light">☀ Светлая</option>
             <option value="dark">☾ Тёмная</option>
             <option value="barbie">🎀 Barbie</option>
             <option value="twilight">🌙 Twilight</option>
           </select>
+          </div>
         </header>
 
         <div class="page-container">
@@ -73,6 +79,8 @@ if (import.meta.client) {
 const pageLabel = computed(() => {
   if (route.path === '/admin/users') return 'Учётные записи'
   if (route.path.startsWith('/results')) return 'Результаты'
+  if (route.path === '/cabinets') return 'Кабинеты'
+  if (route.path.startsWith('/cabinets/')) return 'Кабинет'
   return 'Отчёты'
 })
 </script>

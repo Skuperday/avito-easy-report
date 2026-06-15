@@ -2,6 +2,7 @@ package handler
 
 import (
 	models "avito-easy-report/internal/struct"
+	"avito-easy-report/internal/middleware"
 	"avito-easy-report/internal/service"
 	"fmt"
 	"net/http"
@@ -17,9 +18,7 @@ type Handler struct {
 	store *service.ReportStore
 }
 
-func NewHandler(store *service.ReportStore) *Handler {
-	return &Handler{store: store}
-}
+func NewHandler(store *service.ReportStore) *Handler { return &Handler{store: store} }
 
 func (h *Handler) UploadReport(c *gin.Context) {
 	file, header, err := c.Request.FormFile("file")
@@ -35,10 +34,17 @@ func (h *Handler) UploadReport(c *gin.Context) {
 		return
 	}
 
+	claims := middleware.GetClaims(c)
+	userID := uint(0)
+	if claims != nil {
+		userID = claims.UserID
+	}
+
 	id := uuid.New().String()
 	h.store.Add(id, &service.StoredReport{
 		ID:       id,
 		FileName: header.Filename,
+		UserID:   userID,
 		Offers:   offers,
 		File:     excelFile,
 	})
@@ -52,7 +58,8 @@ func (h *Handler) UploadReport(c *gin.Context) {
 }
 
 func (h *Handler) ListReports(c *gin.Context) {
-	reports := h.store.List()
+	claims := middleware.GetClaims(c)
+	reports := h.store.ListByUser(claims.UserID)
 	result := make([]models.ReportInfo, len(reports))
 	for i, r := range reports {
 		result[i] = models.ReportInfo{ID: r.ID, FileName: r.FileName}
@@ -63,7 +70,7 @@ func (h *Handler) ListReports(c *gin.Context) {
 func (h *Handler) GetStats(c *gin.Context) {
 	id := c.Param("id")
 	report := h.store.Get(id)
-	if report == nil {
+	if report == nil || !h.ownsReport(c, report) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "отчёт не найден"})
 		return
 	}
@@ -83,7 +90,8 @@ func (h *Handler) GetStats(c *gin.Context) {
 
 func (h *Handler) DeleteReport(c *gin.Context) {
 	id := c.Param("id")
-	if h.store.Get(id) == nil {
+	report := h.store.Get(id)
+	if report == nil || !h.ownsReport(c, report) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "отчёт не найден"})
 		return
 	}
@@ -92,7 +100,8 @@ func (h *Handler) DeleteReport(c *gin.Context) {
 }
 
 func (h *Handler) ExportAll(c *gin.Context) {
-	reports := h.store.List()
+	claims := middleware.GetClaims(c)
+	reports := h.store.ListByUser(claims.UserID)
 	if len(reports) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "нет загруженных отчётов"})
 		return
@@ -117,24 +126,21 @@ func (h *Handler) MultiStats(c *gin.Context) {
 	for _, id := range ids {
 		id = strings.TrimSpace(id)
 		report := h.store.Get(id)
-		if report == nil {
+		if report == nil || !h.ownsReport(c, report) {
 			continue
 		}
 		statsMap := service.GetGroupedStats(report.Offers, groupBy)
 		resultStats := service.GetResultStats(statsMap)
 		summary := service.GetSummary(report.Offers)
 		result = append(result, models.StatsResponse{
-			ReportID: report.ID,
-			FileName: report.FileName,
-			Stats:    resultStats,
-			Summary:  summary,
+			ReportID: report.ID, FileName: report.FileName,
+			Stats: resultStats, Summary: summary,
 		})
 	}
 
 	c.JSON(http.StatusOK, models.MultiStatsResponse{Reports: result})
 }
 
-// CompareReports — GET /api/reports/compare?ids=id1,id2&groupBy=city
 func (h *Handler) CompareReports(c *gin.Context) {
 	idsStr := c.Query("ids")
 	if idsStr == "" {
@@ -149,7 +155,6 @@ func (h *Handler) CompareReports(c *gin.Context) {
 
 	groupBy := c.DefaultQuery("groupBy", "city")
 
-	// Собираем отчёты и сортируем по имени файла (содержит даты)
 	type indexedReport struct {
 		id      string
 		offers  []models.Offer
@@ -159,10 +164,9 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	for _, id := range ids {
 		id = strings.TrimSpace(id)
 		r := h.store.Get(id)
-		if r == nil {
+		if r == nil || !h.ownsReport(c, r) {
 			continue
 		}
-		// Парсим дату из имени файла, fallback — текущее время
 		t := parseDateFromFilename(r.FileName)
 		reports = append(reports, indexedReport{id: r.ID, offers: r.Offers, created: t})
 	}
@@ -172,7 +176,6 @@ func (h *Handler) CompareReports(c *gin.Context) {
 		return
 	}
 
-	// Сортируем по дате: ранний → поздний
 	sort.Slice(reports, func(i, j int) bool { return reports[i].created.Before(reports[j].created) })
 
 	early := reports[0].offers
@@ -182,9 +185,15 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// parseDateFromFilename пытается извлечь дату из имени файла вида "Статистика_с_2025-12-10_по_2026-01-08.xlsx"
+func (h *Handler) ownsReport(c *gin.Context, report *service.StoredReport) bool {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		return false
+	}
+	return report.UserID == claims.UserID
+}
+
 func parseDateFromFilename(name string) time.Time {
-	// Ищем паттерн YYYY-MM-DD
 	for i := 0; i < len(name)-9; i++ {
 		if len(name)-i >= 10 && name[i] >= '0' && name[i] <= '9' {
 			if t, err := time.Parse("2006-01-02", name[i:i+10]); err == nil {
