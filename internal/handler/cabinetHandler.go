@@ -64,8 +64,8 @@ func (h *CabinetHandler) ListReports(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "доступ запрещён"})
 		return
 	}
-	// Пока возвращаем все отчёты пользователя — позже можно привязать к кабинету
-	reports := h.reports.ListByUser(claims.UserID)
+	// Возвращаем отчёты кабинета
+	reports := h.reports.ListByCabinet(claims.UserID, cabID)
 	type info struct {
 		ID       string `json:"id"`
 		FileName string `json:"fileName"`

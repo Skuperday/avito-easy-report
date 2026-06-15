@@ -39,14 +39,16 @@ func (h *Handler) UploadReport(c *gin.Context) {
 	if claims != nil {
 		userID = claims.UserID
 	}
+	cabinetID := c.PostForm("cabinetId")
 
 	id := uuid.New().String()
 	h.store.Add(id, &service.StoredReport{
-		ID:       id,
-		FileName: header.Filename,
-		UserID:   userID,
-		Offers:   offers,
-		File:     excelFile,
+		ID:        id,
+		FileName:  header.Filename,
+		UserID:    userID,
+		CabinetID: cabinetID,
+		Offers:    offers,
+		File:      excelFile,
 	})
 
 	c.JSON(http.StatusOK, models.UploadResponse{

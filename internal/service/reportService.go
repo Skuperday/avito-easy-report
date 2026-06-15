@@ -20,11 +20,12 @@ type ReportStore struct {
 
 // StoredReport — загруженный отчёт со всеми данными
 type StoredReport struct {
-	ID       string
-	FileName string
-	UserID   uint
-	Offers   []models.Offer
-	File     *excelize.File // оригинальный файл для экспорта
+	ID        string
+	FileName  string
+	UserID    uint
+	CabinetID string
+	Offers    []models.Offer
+	File      *excelize.File
 }
 
 // NewReportStore создаёт хранилище
@@ -66,6 +67,19 @@ func (s *ReportStore) ListByUser(userID uint) []StoredReport {
 	result := make([]StoredReport, 0)
 	for _, r := range s.reports {
 		if r.UserID == userID {
+			result = append(result, *r)
+		}
+	}
+	return result
+}
+
+// ListByCabinet возвращает отчёты кабинета
+func (s *ReportStore) ListByCabinet(userID uint, cabinetID string) []StoredReport {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]StoredReport, 0)
+	for _, r := range s.reports {
+		if r.UserID == userID && r.CabinetID == cabinetID {
 			result = append(result, *r)
 		}
 	}
