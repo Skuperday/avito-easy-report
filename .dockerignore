@@ -1,0 +1,8 @@
+frontend/
+*.db
+.git/
+.gitignore
+*.md
+avito-easy-server
+.env
+.DS_Store
