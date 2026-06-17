@@ -10,15 +10,34 @@
           </div>
         </NuxtLink>
 
-        <nav class="grid gap-1">
+        <nav class="grid gap-1" style="overflow-y:auto">
           <NuxtLink to="/" class="nav-link" :class="{ 'router-link-active': route.path === '/' }">
             <span class="grid size-7 place-items-center rounded-lg bg-white/5 text-xs font-black uppercase">📊</span>
             <span class="min-w-0"><span class="block truncate">Отчёты</span></span>
           </NuxtLink>
-          <NuxtLink to="/cabinets" class="nav-link" :class="{ 'router-link-active': route.path.startsWith('/cabinets') }">
-            <span class="grid size-7 place-items-center rounded-lg bg-white/5 text-xs font-black uppercase">📁</span>
-            <span class="min-w-0"><span class="block truncate">Кабинеты</span></span>
-          </NuxtLink>
+
+          <!-- Выпадающий список кабинетов -->
+          <div>
+            <div class="flex items-center">
+              <NuxtLink to="/cabinets" class="nav-link flex-1" :class="{ 'router-link-active': route.path === '/cabinets' }">
+                <span class="grid size-7 place-items-center rounded-lg bg-white/5 text-xs font-black uppercase">📁</span>
+                <span class="min-w-0 flex-1"><span class="block truncate">Кабинеты</span></span>
+                <span class="text-sm cursor-pointer hover:text-foreground ml-1" @click.prevent.stop="cabsOpen = !cabsOpen" v-if="cabinetList.length > 0">{{ cabsOpen ? '▾' : '▸' }}</span>
+              </NuxtLink>
+            </div>
+            <div v-if="cabsOpen && cabinetList.length > 0" class="grid gap-0.5 mt-0.5">
+              <NuxtLink
+                v-for="c in cabinetList" :key="c.id"
+                :to="'/cabinets/' + c.id"
+                class="nav-link text-sm"
+                style="padding-left:3.5rem"
+                :class="{ 'router-link-active': route.params.id === c.id }"
+              >
+                <span class="block truncate">{{ c.name }}</span>
+              </NuxtLink>
+            </div>
+          </div>
+
           <NuxtLink v-if="auth.isAdmin.value" to="/admin/users" class="nav-link" :class="{ 'router-link-active': route.path === '/admin/users' }">
             <span class="grid size-7 place-items-center rounded-lg bg-white/5 text-xs font-black uppercase">👥</span>
             <span class="min-w-0"><span class="block truncate">Пользователи</span></span>
@@ -61,6 +80,8 @@
 const auth = useAuth()
 const route = useRoute()
 const theme = ref('dark')
+const cabsOpen = ref(false)
+const cabinetList = ref<{ id: string; name: string }[]>([])
 
 function setTheme(name: string) {
   theme.value = name
@@ -76,11 +97,28 @@ if (import.meta.client) {
   document.documentElement.setAttribute('data-theme', saved)
 }
 
+const loadCabinets = async () => {
+  try {
+    const res = await auth.apiFetch('/cabinets')
+    if (res.ok) cabinetList.value = await res.json()
+  } catch {}
+}
+
 const pageLabel = computed(() => {
   if (route.path === '/admin/users') return 'Учётные записи'
   if (route.path.startsWith('/results')) return 'Результаты'
-  if (route.path === '/cabinets') return 'Кабинеты'
+  if (route.path === '/cabinets') return 'Управление кабинетами'
   if (route.path.startsWith('/cabinets/')) return 'Кабинет'
   return 'Отчёты'
+})
+
+// Загружаем кабинеты при входе и при возврате со страницы кабинетов
+watch(() => route.path, () => {
+  loadCabinets()
+  if (route.path.startsWith('/cabinets/') || route.path === '/cabinets') cabsOpen.value = true
+})
+onMounted(() => {
+  loadCabinets()
+  if (route.path.startsWith('/cabinets/') || route.path === '/cabinets') cabsOpen.value = true
 })
 </script>

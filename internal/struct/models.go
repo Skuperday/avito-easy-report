@@ -62,6 +62,7 @@ type StatsSummary struct {
 	TotalShows    int       `json:"totalShows"`
 	TotalViews    int       `json:"totalViews"`
 	TotalContacts int       `json:"totalContacts"`
+	TotalExpense  float64   `json:"totalExpense"`
 	TopOffers     []TopItem `json:"topOffers"`
 	TopTitles     []TopItem `json:"topTitles"`
 	TopCities     []TopItem `json:"topCities"`

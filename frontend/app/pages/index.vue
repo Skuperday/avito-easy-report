@@ -26,18 +26,42 @@
     </div>
 
     <!-- Список отчётов -->
-    <div v-if="reports.length > 0" class="grid gap-2 mb-4">
+    <div v-if="reports.length > 0" class="mb-4">
       <div class="flex gap-2 mb-1" v-if="checked.size > 0">
-        <button class="btn destructive text-sm" @click="deleteSelected">Удалить выбранные ({{ checked.size }})</button>
-        <button class="btn secondary text-sm" @click="checked = new Set(); checked = new Set()">Снять выделение</button>
+        <button class="btn destructive text-sm" @click="deleteSelected">Удалить ({{ checked.size }})</button>
+        <button class="btn secondary text-sm" @click="checked = new Set(); checked = new Set()">Снять</button>
       </div>
-      <div v-for="r in reports" :key="r.id"
-        class="flex items-center gap-3 rounded-xl border p-3 text-sm"
-        :style="{ borderColor: checked.has(r.id) ? 'var(--ring)' : 'var(--border)' }"
-        :class="checked.has(r.id) ? 'bg-accent' : ''">
-        <input type="checkbox" :checked="checked.has(r.id)" @change="toggleCheck(r.id)" class="w-4 h-4 accent-indigo-500" />
-        <div class="flex-1 min-w-0"><div class="font-bold truncate">{{ r.fileName }}</div><div class="muted text-xs">{{ r.id.slice(0, 8) }}...</div></div>
-        <button @click="deleteSingle(r.id)" class="text-xs font-medium hover:underline" style="color: var(--destructive)">Удалить</button>
+      <div v-for="r in reports" :key="r.id">
+        <div
+          class="flex items-center gap-3 rounded-xl border p-3 text-sm cursor-pointer"
+          :style="{ borderColor: checked.has(r.id) ? 'var(--ring)' : expandedId === r.id ? 'var(--ring)' : 'var(--border)' }"
+          :class="checked.has(r.id) ? 'bg-accent' : ''"
+          @click="toggleExpand(r.id)"
+        >
+          <input type="checkbox" :checked="checked.has(r.id)" @change="toggleCheck(r.id)" @click.stop class="w-4 h-4 accent-indigo-500 shrink-0" />
+          <div class="flex-1 min-w-0"><div class="font-bold truncate">{{ r.fileName }}</div><div class="muted text-xs">{{ r.id.slice(0, 8) }}...</div></div>
+          <button @click.stop="deleteSingle(r.id)" class="text-xs font-medium hover:underline shrink-0" style="color: var(--destructive)">Удалить</button>
+        </div>
+        <!-- Развёрнутая статистика -->
+        <div v-if="expandedId === r.id" class="border border-t-0 rounded-b-xl px-4 py-3 mb-1 text-sm" style="border-color: var(--ring); background: color-mix(in oklch, var(--ring) 4%, transparent)">
+          <div v-if="expandedLoading" class="muted text-xs">Загрузка...</div>
+          <div v-else-if="expandedStats">
+            <p class="text-xs muted mb-2">
+              {{ expandedStats.totalShows?.toLocaleString('ru') }} показов ·
+              {{ expandedStats.totalViews?.toLocaleString('ru') }} просмотров ·
+              {{ expandedStats.totalContacts?.toLocaleString('ru') }} контактов ·
+              {{ expandedStats.totalExpense?.toLocaleString('ru', {minimumFractionDigits: 2}) }} ₽ расходов
+            </p>
+            <div class="flex flex-wrap gap-1.5 text-xs" v-if="expandedStats.topCities?.length">
+              <span class="muted mr-1">Топ городов:</span>
+              <span class="badge" v-for="t in expandedStats.topCities" :key="t.name">{{ t.name }}: {{ t.value }}</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5 text-xs mt-1" v-if="expandedStats.topOffers?.length">
+              <span class="muted mr-1">Топ объявлений:</span>
+              <span class="badge" v-for="t in expandedStats.topOffers" :key="t.name">{{ t.name.slice(0, 30) }}: {{ t.value }}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div v-else class="text-center muted text-sm py-8">Нет загруженных отчётов</div>
@@ -48,16 +72,16 @@
       <button v-if="reports.length > 0" class="btn secondary text-sm" @click="exportAll">Скачать XLSX</button>
     </div>
 
-    <!-- Toast-уведомления (правый верхний угол) -->
-    <div class="fixed top-4 right-4 z-50 flex flex-col gap-2" style="max-width:360px">
+    <!-- Toast -->
+    <div class="fixed top-4 right-4 z-50 flex flex-col gap-1.5" style="max-width:300px">
       <div v-for="(n, i) in toasts" :key="i"
-        class="rounded-xl border p-3 text-sm flex justify-between items-start gap-2 shadow-lg"
-        :class="n.type === 'success' ? 'border-green-500/30 bg-green-500/10 text-green-300' : n.type === 'error' ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-ring/30 bg-card text-foreground'"
-        :style="{ backdropFilter: 'blur(12px)', background: n.type === 'success' ? 'color-mix(in oklch, var(--chart-2) 12%, var(--card))' : n.type === 'error' ? 'color-mix(in oklch, var(--destructive) 12%, var(--card))' : 'var(--card)' }"
-      >
-        <span class="whitespace-pre-wrap">{{ n.text }}</span>
-        <button @click="toasts.splice(i, 1)" class="text-xs font-bold hover:opacity-70 ml-2 shrink-0 muted">✕</button>
+        class="rounded-lg border px-2.5 py-1.5 text-xs flex items-center gap-2 shadow-lg"
+        :class="n.type === 'success' ? 'border-green-500/30 bg-green-500/10 text-green-300' : n.type === 'error' ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-ring/30 bg-card text-foreground'">
+        <span class="shrink-0">{{ n.type === 'success' ? '✓' : n.type === 'error' ? '✗' : '·' }}</span>
+        <span class="truncate flex-1">{{ n.text }}</span>
+        <button @click="toasts.splice(i, 1)" class="shrink-0 hover:opacity-70 muted text-xs">✕</button>
       </div>
+      <button v-if="toasts.length > 1" @click="toasts = []" class="text-xs muted hover:text-foreground self-end">закрыть все</button>
     </div>
   </div>
 </template>
@@ -73,26 +97,47 @@ const reports = ref<{ id: string; fileName: string }[]>([])
 const checked = ref(new Set<string>())
 const toasts = ref<{ type: string; text: string }[]>([])
 const reportType = ref('avito')
+const expandedId = ref<string | null>(null)
+const expandedStats = ref<any>(null)
+const expandedLoading = ref(false)
 
 const notify = (type: string, text: string) => {
   toasts.value.push({ type, text })
-  setTimeout(() => { if (toasts.value.length > 0) toasts.value.shift() }, 8000)
+}
+
+const toggleExpand = async (id: string) => {
+  if (expandedId.value === id) {
+    expandedId.value = null
+    expandedStats.value = null
+    return
+  }
+  expandedId.value = id
+  expandedLoading.value = true
+  expandedStats.value = null
+  try {
+    const res = await auth.apiFetch(`/reports/${id}/stats?groupBy=city`)
+    if (res.ok) {
+      const data = await res.json()
+      expandedStats.value = data.summary
+    }
+  } catch {}
+  expandedLoading.value = false
 }
 
 const uploadFile = async (file: File) => {
   const formData = new FormData()
   formData.append('file', file)
-  formData.append('type', reportType.value)
   notify('', `Загружаем ${file.name}...`)
   try {
     const res = await auth.apiFetch('/upload', { method: 'POST', body: formData, headers: {} })
     const data = await res.json()
     if (res.ok) {
-      let msg = `✓ ${data.fileName} — ${data.rows} объявлений`
-      if (data.warnings?.length) msg += `\n⚠ ${data.warnings.join('\n⚠ ')}`
+      const shortName = data.fileName.length > 40 ? data.fileName.slice(0, 37) + '...' : data.fileName
+      let msg = `${shortName} — ${data.rows} строк`
+      if (data.warnings?.length) msg += ` (${data.warnings.length} колонок не найдено)`
       notify('success', msg)
       await refreshReports()
-    } else { notify('error', `✗ ${data.error}`) }
+    } else { notify('error', data.error) }
   } catch (e: any) { notify('error', e.message) }
 }
 
@@ -106,12 +151,8 @@ const deleteSingle = async (id: string) => {
   try { await auth.apiFetch(`/reports/${id}`, { method: 'DELETE' }); checked.value.delete(id); checked.value = new Set(checked.value); await refreshReports() } catch {}
 }
 const deleteSelected = async () => {
-  for (const id of checked.value) {
-    try { await auth.apiFetch(`/reports/${id}`, { method: 'DELETE' }) } catch {}
-  }
-  checked.value = new Set()
-  await refreshReports()
-  notify('success', `Удалено отчётов: ${checked.size || 'все выбранные'}`)
+  for (const id of checked.value) { try { await auth.apiFetch(`/reports/${id}`, { method: 'DELETE' }) } catch {} }
+  checked.value = new Set(); await refreshReports()
 }
 
 const showResults = () => navigateTo(`/results?ids=${[...checked.value].join(',')}`)

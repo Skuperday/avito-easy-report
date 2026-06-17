@@ -362,6 +362,7 @@ func keepNumbersAndUnderscores(input string) string {
 // GetSummary строит краткую сводку: топ-5 объявлений, заголовков, городов
 func GetSummary(offers []models.Offer) models.StatsSummary {
 	shows, views, contacts := 0, 0, 0
+	var expense float64
 	offerContacts := make(map[string]int)
 	titleContacts := make(map[string]int)
 	cityContacts := make(map[string]int)
@@ -370,6 +371,7 @@ func GetSummary(offers []models.Offer) models.StatsSummary {
 		shows += o.Shows
 		views += o.Views
 		contacts += o.Contacts
+		expense += o.Promotion + o.ViewersCost
 		offerContacts[o.Name] += o.Contacts
 		titleContacts[o.Name] += o.Contacts
 		cityContacts[o.City] += o.Contacts
@@ -379,6 +381,7 @@ func GetSummary(offers []models.Offer) models.StatsSummary {
 		TotalShows:    shows,
 		TotalViews:    views,
 		TotalContacts: contacts,
+		TotalExpense:  expense,
 		TopOffers:     topN(offerContacts, 5),
 		TopTitles:     topN(titleContacts, 5),
 		TopCities:     topN(cityContacts, 5),
