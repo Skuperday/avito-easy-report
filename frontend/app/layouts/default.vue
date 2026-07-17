@@ -50,6 +50,7 @@
             <div class="muted mt-1 text-xs">{{ auth.user.value?.role || 'guest' }}</div>
           </div>
           <button class="btn secondary text-sm" @click="auth.logout()">Выйти</button>
+          <div class="text-center text-[0.65rem] muted">v1.0.0</div>
         </div>
       </div>
     </aside>
@@ -58,7 +59,6 @@
       <div class="content-frame">
         <header class="topbar justify-between" style="min-height:2.5rem;padding:0.4rem 1rem">
           <div class="flex items-center gap-2">
-            <span class="text-xs muted">v1.0.0</span>
             <select class="theme-select" :value="theme" @change="setTheme(($event.target as HTMLSelectElement).value)">
             <option value="light">☀ Светлая</option>
             <option value="dark">☾ Тёмная</option>
