@@ -64,6 +64,7 @@
             <option value="dark">☾ Тёмная</option>
             <option value="barbie">🎀 Barbie</option>
             <option value="twilight">🌙 Twilight</option>
+            <option value="sonic-x">🦔 Соник-X</option>
           </select>
           </div>
         </header>
