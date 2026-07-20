@@ -4,6 +4,7 @@ export interface Report {
 }
 
 export interface ResultStats {
+  number?: number
   key: string
   city?: string
   shows: number

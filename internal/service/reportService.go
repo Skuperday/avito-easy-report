@@ -201,6 +201,12 @@ func GetTopListings(offers []models.Offer, limit int) []models.ResultStats {
 	if limit > 0 && limit < len(result) {
 		result = result[:limit]
 	}
+
+	// Нумерация после сортировки и обрезки
+	for i := range result {
+		result[i].Number = i + 1
+	}
+
 	return result
 }
 

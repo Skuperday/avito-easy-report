@@ -41,7 +41,7 @@
           </tr></thead>
           <tbody>
             <tr v-for="(s, i) in compareData.delta" :key="s.key">
-              <td class="font-bold">{{ s.key }}</td>
+              <td class="font-bold">{{ groupBy === 'offers' ? s.number : s.key }}</td>
               <td v-if="groupBy === 'offers'" class="text-xs muted">{{ s.city }}</td>
               <!-- Показы -->
               <td class="text-right muted">{{ fmt(earlyRow(i)?.shows) }}</td>
@@ -95,7 +95,7 @@
         <div class="table-wrap">
           <table class="data-table compact">
             <thead><tr>
-              <th class="cursor-pointer select-none" @click="toggleSort('key')">{{ groupLabel }} <span class="muted">{{ sortIcon('key') }}</span></th>
+              <th class="cursor-pointer select-none" @click="toggleSort(groupBy === 'offers' ? 'number' : 'key')">{{ groupLabel }} <span class="muted">{{ sortIcon(groupBy === 'offers' ? 'number' : 'key') }}</span></th>
               <th v-if="groupBy === 'offers'" class="cursor-pointer select-none" @click="toggleSort('city')">Город <span class="muted">{{ sortIcon('city') }}</span></th>
               <th class="text-right cursor-pointer select-none" @click="toggleSort('shows')">Показы <span class="muted">{{ sortIcon('shows') }}</span></th>
               <th class="text-right cursor-pointer select-none" @click="toggleSort('ppConversion')">ПП% <span class="muted">{{ sortIcon('ppConversion') }}</span></th>
@@ -108,7 +108,7 @@
             </tr></thead>
             <tbody>
               <tr v-for="s in sorted(r.stats)" :key="s.key">
-                <td class="font-bold">{{ s.key }}</td>
+                <td class="font-bold">{{ groupBy === 'offers' ? s.number : s.key }}</td>
                 <td v-if="groupBy === 'offers'" class="text-xs muted">{{ s.city }}</td>
                 <td class="text-right">{{ fmt(s.shows) }}</td>
                 <td class="text-right">{{ fmt(s.ppConversion, 1) }}%</td>
@@ -147,7 +147,7 @@ const isCompare = ref(false)
 
 const sortKey = ref('contacts')
 const sortDir = ref<'asc' | 'desc'>('desc')
-const groupLabel = computed(() => groupBy.value === 'city' ? 'Город' : groupBy.value === 'category' ? 'Категория' : groupBy.value === 'offers' ? 'Название' : 'Подкатегория')
+const groupLabel = computed(() => groupBy.value === 'city' ? 'Город' : groupBy.value === 'category' ? 'Категория' : groupBy.value === 'offers' ? '№' : 'Подкатегория')
 
 function toggleSort(key: string) { if (sortKey.value === key) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'; else { sortKey.value = key; sortDir.value = 'desc' } }
 function sortIcon(key: string) { if (sortKey.value !== key) return ''; return sortDir.value === 'asc' ? '↑' : '↓' }
