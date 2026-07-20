@@ -5,6 +5,7 @@ export interface Report {
 
 export interface ResultStats {
   key: string
+  city?: string
   shows: number
   views: number
   contacts: number

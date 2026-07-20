@@ -35,6 +35,7 @@ type Stats struct {
 // ResultStats — строка результата с группировкой
 type ResultStats struct {
 	Key             string  `json:"key"`
+	City            string  `json:"city,omitempty"`
 	Views           int     `json:"views"`
 	Shows           int     `json:"shows"`
 	Favorite        int     `json:"favorite"`

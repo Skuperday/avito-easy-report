@@ -163,6 +163,47 @@ func groupKey(o models.Offer, groupBy string) string {
 	}
 }
 
+// GetTopListings возвращает топ-N индивидуальных объявлений по контактам (без агрегации)
+func GetTopListings(offers []models.Offer, limit int) []models.ResultStats {
+	result := make([]models.ResultStats, 0, len(offers))
+	for _, o := range offers {
+		expense := o.Promotion + o.ViewersCost
+		result = append(result, models.ResultStats{
+			Key:             o.Name,
+			City:            o.City,
+			Shows:           o.Shows,
+			Views:           o.Views,
+			Contacts:        o.Contacts,
+			Favorite:        o.Favorite,
+			Promotion:       o.Promotion,
+			ViewersCost:     o.ViewersCost,
+			Expense:         expense,
+			PPConversion:    canDivByZero(float64(o.Views), float64(o.Shows)) * 100,
+			PKConversion:    canDivByZero(float64(o.Contacts), float64(o.Views)) * 100,
+			AvgContactPrice: canDivByZero(expense, float64(o.Contacts)),
+			AvgViewPrice:    canDivByZero(expense, float64(o.Views)),
+			TargetViewers:   o.TargetViewers,
+			ViewWithMessage: o.ViewWithMessage,
+			LookPhone:       o.LookPhone,
+			Response:        o.Response,
+		})
+	}
+
+	// Сортировка по убыванию контактов
+	for i := 0; i < len(result); i++ {
+		for j := i + 1; j < len(result); j++ {
+			if result[j].Contacts > result[i].Contacts {
+				result[i], result[j] = result[j], result[i]
+			}
+		}
+	}
+
+	if limit > 0 && limit < len(result) {
+		result = result[:limit]
+	}
+	return result
+}
+
 // GetResultStats вычисляет производные метрики
 func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 	result := make([]models.ResultStats, 0, len(stats))

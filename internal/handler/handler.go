@@ -78,8 +78,13 @@ func (h *Handler) GetStats(c *gin.Context) {
 	}
 
 	groupBy := c.DefaultQuery("groupBy", "city")
-	statsMap := service.GetGroupedStats(report.Offers, groupBy)
-	resultStats := service.GetResultStats(statsMap)
+	var resultStats []models.ResultStats
+	if groupBy == "offers" {
+		resultStats = service.GetTopListings(report.Offers, 10)
+	} else {
+		statsMap := service.GetGroupedStats(report.Offers, groupBy)
+		resultStats = service.GetResultStats(statsMap)
+	}
 	summary := service.GetSummary(report.Offers)
 
 	c.JSON(http.StatusOK, models.StatsResponse{
@@ -131,8 +136,13 @@ func (h *Handler) MultiStats(c *gin.Context) {
 		if report == nil || !h.ownsReport(c, report) {
 			continue
 		}
-		statsMap := service.GetGroupedStats(report.Offers, groupBy)
-		resultStats := service.GetResultStats(statsMap)
+		var resultStats []models.ResultStats
+		if groupBy == "offers" {
+			resultStats = service.GetTopListings(report.Offers, 10)
+		} else {
+			statsMap := service.GetGroupedStats(report.Offers, groupBy)
+			resultStats = service.GetResultStats(statsMap)
+		}
 		summary := service.GetSummary(report.Offers)
 		result = append(result, models.StatsResponse{
 			ReportID: report.ID, FileName: report.FileName,
@@ -156,6 +166,12 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	}
 
 	groupBy := c.DefaultQuery("groupBy", "city")
+
+	// Для режима "объявления" сравнение идёт по названию объявления
+	compareGroupBy := groupBy
+	if groupBy == "offers" {
+		compareGroupBy = "name"
+	}
 
 	type indexedReport struct {
 		id      string
@@ -183,7 +199,7 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	early := reports[0].offers
 	late := reports[len(reports)-1].offers
 
-	result := service.ComparePeriods(early, late, groupBy)
+	result := service.ComparePeriods(early, late, compareGroupBy)
 	c.JSON(http.StatusOK, result)
 }
 
