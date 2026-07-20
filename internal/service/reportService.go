@@ -118,9 +118,17 @@ func ParseReport(reader io.Reader, fileName string) ([]models.Offer, *excelize.F
 
 	columnIndexMap, warnings := getColumnIndexMap(rows[0])
 	offers := make([]models.Offer, 0, len(rows)-1)
+	listingColIdx := columnIndexMap["listingNumber"]
 
-	for _, row := range rows[1:] {
+	for rowIdx, row := range rows[1:] {
 		offer := parseRow(row, columnIndexMap)
+		// Извлекаем номер объявления из HYPERLINK, если колонка есть
+		if listingColIdx >= 0 {
+			cellRef, _ := excelize.CoordinatesToCellName(listingColIdx+1, rowIdx+2)
+			if formula, err := f.GetCellFormula("Sheet1", cellRef); err == nil {
+				offer.ListingNumber = extractListingNumber(formula)
+			}
+		}
 		offers = append(offers, offer)
 	}
 
@@ -249,62 +257,75 @@ func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 	return result
 }
 
-// ExportXLSX формирует сводный result.xlsx в writer
+// ExportXLSX формирует сводный result.xlsx на одном листе: города, категории, подкатегории, топ-10 объявлений
 func ExportXLSX(reports []StoredReport, w io.Writer) error {
 	file := excelize.NewFile()
 	defer file.Close()
 
-	headers := []string{
-		"Город",
-		"Показы",
-		"ПП%",
-		"Просмотры",
-		"ПК%",
-		"Контакты",
-		"Расход",
-		"Средняя цена контакта",
-		"Избранное",
+	sheet := "Sheet1"
+	_ = file.SetColWidth(sheet, "A", "I", 15)
+
+	headers := []string{"", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Избранное"}
+	offerHeaders := []string{"Номер объявления", "Город", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта"}
+
+	row := 1
+	cell := func(col, r int) string {
+		c, _ := excelize.CoordinatesToCellName(col, r)
+		return c
 	}
 
-	for i, report := range reports {
-		stats := GetGroupedStats(report.Offers, "city")
-		resultStats := GetResultStats(stats)
-		sheetName := keepNumbersAndUnderscores(report.FileName)
+	writeHeaders := func(hdrs []string) {
+		for col, h := range hdrs {
+			_ = file.SetCellValue(sheet, cell(col+1, row), h)
+		}
+		row++
+	}
 
-		// Первый лист переименовываем, остальные создаём
-		var index int
-		var err error
-		if i == 0 {
-			file.SetSheetName("Sheet1", sheetName)
-			index = 0
-		} else {
-			index, err = file.NewSheet(sheetName)
-			if err != nil {
-				return fmt.Errorf("ошибка создания листа %s: %w", sheetName, err)
+	writeSection := func(title string, firstCol string, stats []models.ResultStats, hdrs []string) {
+		// Подставляем название первой колонки
+		hdrs[0] = firstCol
+		// Заголовок секции
+		_ = file.SetCellValue(sheet, cell(1, row), title)
+		row++
+		// Шапка таблицы
+		writeHeaders(hdrs)
+		// Данные
+		for _, s := range stats {
+			_ = file.SetCellValue(sheet, cell(1, row), s.Key)
+			offset := 0
+			if hdrs[0] == "Номер объявления" {
+				_ = file.SetCellValue(sheet, cell(2, row), s.City)
+				offset = 1
 			}
+			_ = file.SetCellValue(sheet, cell(2+offset, row), s.Shows)
+			_ = file.SetCellValue(sheet, cell(3+offset, row), fmt.Sprintf("%.2f%%", s.PPConversion))
+			_ = file.SetCellValue(sheet, cell(4+offset, row), s.Views)
+			_ = file.SetCellValue(sheet, cell(5+offset, row), fmt.Sprintf("%.2f%%", s.PKConversion))
+			_ = file.SetCellValue(sheet, cell(6+offset, row), s.Contacts)
+			_ = file.SetCellValue(sheet, cell(7+offset, row), fmt.Sprintf("%.2f", s.Expense))
+			_ = file.SetCellValue(sheet, cell(8+offset, row), fmt.Sprintf("%.2f", s.AvgContactPrice))
+			_ = file.SetCellValue(sheet, cell(9+offset, row), s.Favorite)
+			row++
 		}
-
-		file.SetActiveSheet(index)
-		_ = file.SetColWidth(sheetName, "A", "N", 15)
-
-		for col, header := range headers {
-			_ = file.SetCellValue(sheetName, getCellName(col+1, 1), header)
-		}
-
-		for rowIdx, stat := range resultStats {
-			row := rowIdx + 2
-			_ = file.SetCellValue(sheetName, getCellName(1, row), stat.Key)
-			_ = file.SetCellValue(sheetName, getCellName(2, row), stat.Shows)
-			_ = file.SetCellValue(sheetName, getCellName(3, row), fmt.Sprintf("%.2f%%", stat.PPConversion))
-			_ = file.SetCellValue(sheetName, getCellName(4, row), stat.Views)
-			_ = file.SetCellValue(sheetName, getCellName(5, row), fmt.Sprintf("%.2f%%", stat.PKConversion))
-			_ = file.SetCellValue(sheetName, getCellName(6, row), stat.Contacts)
-			_ = file.SetCellValue(sheetName, getCellName(7, row), fmt.Sprintf("%.2f", stat.Expense))
-			_ = file.SetCellValue(sheetName, getCellName(8, row), fmt.Sprintf("%.2f", stat.AvgContactPrice))
-			_ = file.SetCellValue(sheetName, getCellName(9, row), stat.Favorite)
-		}
+		row++ // пустая строка-разделитель
 	}
 
+	for _, report := range reports {
+		// Название отчёта
+		_ = file.SetCellValue(sheet, cell(1, row), "Отчёт: "+report.FileName)
+		row += 2
+
+		// Города
+		writeSection("По городам", "Город", GetResultStats(GetGroupedStats(report.Offers, "city")), headers)
+		// Категории
+		writeSection("По категориям", "Категория", GetResultStats(GetGroupedStats(report.Offers, "category")), headers)
+		// Подкатегории
+		writeSection("По подкатегориям", "Подкатегория", GetResultStats(GetGroupedStats(report.Offers, "name")), headers)
+		// Топ-10 объявлений
+		writeSection("Топ-10 объявлений по контактам", "Номер объявления", GetTopListings(report.Offers, 10), offerHeaders)
+	}
+
+	file.SetSheetName("Sheet1", "Сводка")
 	return file.Write(w)
 }
 
@@ -335,6 +356,29 @@ func safeGet(row []string, index int) string {
 		return ""
 	}
 	return row[index]
+}
+
+// extractListingNumber вытаскивает номер объявления из HYPERLINK-формулы Avito
+// Формат: =HYPERLINK("url","номер") → "номер"
+func extractListingNumber(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	// Ищем последний аргумент в кавычках: ,"число")
+	lastQuote := strings.LastIndex(raw, "\"")
+	if lastQuote < 0 {
+		return raw // не формула — возвращаем как есть
+	}
+	prevQuote := strings.LastIndex(raw[:lastQuote], "\"")
+	if prevQuote < 0 {
+		return raw
+	}
+	inner := raw[prevQuote+1 : lastQuote]
+	// Если внутри только цифры — это номер объявления
+	if len(inner) > 0 {
+		return inner
+	}
+	return raw
 }
 
 func getColumnIndexMap(row []string) (map[string]int, []string) {
