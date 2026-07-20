@@ -157,7 +157,7 @@ func groupKey(o models.Offer, groupBy string) string {
 	case "category":
 		return o.Category
 	case "name":
-		return o.SubCategory
+		return o.Name
 	default:
 		return o.City
 	}
@@ -179,6 +179,7 @@ func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 			PKConversion:    canDivByZero(float64(stat.Contacts), float64(stat.Views)) * 100,
 			AvgViewPrice:    canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Views)),
 			AvgContactPrice: canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Contacts)),
+			Expense:         stat.Promotion + stat.ViewersCost,
 			TargetViewers:   stat.TargetViewers,
 			ViewWithMessage: stat.ViewWithMessage,
 			LookPhone:       stat.LookPhone,
@@ -197,18 +198,13 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 	headers := []string{
 		"Город",
 		"Показы",
+		"ПП%",
 		"Просмотры",
+		"ПК%",
 		"Контакты",
-		"ПП Конверсия",
-		"ПК Конверсия",
-		"Избранное",
-		"Продвижение",
-		"Затраты на просмотры",
-		"Целевые просмотры",
-		"Написали в чат",
-		"Смотрели телефон",
-		"Средняя цена просмотра",
+		"Расход",
 		"Средняя цена контакта",
+		"Избранное",
 	}
 
 	for i, report := range reports {
@@ -240,18 +236,13 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 			row := rowIdx + 2
 			_ = file.SetCellValue(sheetName, getCellName(1, row), stat.Key)
 			_ = file.SetCellValue(sheetName, getCellName(2, row), stat.Shows)
-			_ = file.SetCellValue(sheetName, getCellName(3, row), stat.Views)
-			_ = file.SetCellValue(sheetName, getCellName(4, row), stat.Contacts)
-			_ = file.SetCellValue(sheetName, getCellName(5, row), fmt.Sprintf("%.2f%%", stat.PPConversion))
-			_ = file.SetCellValue(sheetName, getCellName(6, row), fmt.Sprintf("%.2f%%", stat.PKConversion))
-			_ = file.SetCellValue(sheetName, getCellName(7, row), stat.Favorite)
-			_ = file.SetCellValue(sheetName, getCellName(8, row), stat.Promotion)
-			_ = file.SetCellValue(sheetName, getCellName(9, row), stat.ViewersCost)
-			_ = file.SetCellValue(sheetName, getCellName(10, row), stat.TargetViewers)
-			_ = file.SetCellValue(sheetName, getCellName(11, row), stat.ViewWithMessage)
-			_ = file.SetCellValue(sheetName, getCellName(12, row), stat.LookPhone)
-			_ = file.SetCellValue(sheetName, getCellName(13, row), fmt.Sprintf("%.2f", stat.AvgViewPrice))
-			_ = file.SetCellValue(sheetName, getCellName(14, row), fmt.Sprintf("%.2f", stat.AvgContactPrice))
+			_ = file.SetCellValue(sheetName, getCellName(3, row), fmt.Sprintf("%.2f%%", stat.PPConversion))
+			_ = file.SetCellValue(sheetName, getCellName(4, row), stat.Views)
+			_ = file.SetCellValue(sheetName, getCellName(5, row), fmt.Sprintf("%.2f%%", stat.PKConversion))
+			_ = file.SetCellValue(sheetName, getCellName(6, row), stat.Contacts)
+			_ = file.SetCellValue(sheetName, getCellName(7, row), fmt.Sprintf("%.2f", stat.Expense))
+			_ = file.SetCellValue(sheetName, getCellName(8, row), fmt.Sprintf("%.2f", stat.AvgContactPrice))
+			_ = file.SetCellValue(sheetName, getCellName(9, row), stat.Favorite)
 		}
 	}
 
@@ -437,6 +428,7 @@ func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareRe
 				Key: s.Key, Shows: s.Shows, Views: s.Views, Contacts: s.Contacts,
 				PPConversion: s.PPConversion, PKConversion: s.PKConversion,
 				AvgViewPrice: s.AvgViewPrice, AvgContactPrice: s.AvgContactPrice,
+				Expense: s.Expense,
 			})
 			continue
 		}
@@ -455,6 +447,7 @@ func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareRe
 			PKConversion:    s.PKConversion - e.PKConversion,
 			AvgViewPrice:    s.AvgViewPrice - e.AvgViewPrice,
 			AvgContactPrice: s.AvgContactPrice - e.AvgContactPrice,
+			Expense:         s.Expense - e.Expense,
 		})
 	}
 

@@ -48,6 +48,7 @@ type ResultStats struct {
 	PKConversion    float64 `json:"pkConversion"`
 	AvgViewPrice    float64 `json:"avgViewPrice"`
 	AvgContactPrice float64 `json:"avgContactPrice"`
+	Expense         float64 `json:"expense"`
 	Response        int     `json:"response"`
 }
 

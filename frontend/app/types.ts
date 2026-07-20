@@ -4,7 +4,7 @@ export interface Report {
 }
 
 export interface ResultStats {
-  city: string
+  key: string
   shows: number
   views: number
   contacts: number
@@ -18,6 +18,7 @@ export interface ResultStats {
   pkConversion: number
   avgViewPrice: number
   avgContactPrice: number
+  expense: number
 }
 
 export interface StatsResponse {
