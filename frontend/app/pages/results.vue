@@ -9,6 +9,8 @@
       <button class="btn text-sm" :class="groupBy === 'category' ? '' : 'secondary'" @click="groupBy = 'category'; reload()">По категориям</button>
       <button class="btn text-sm" :class="groupBy === 'name' ? '' : 'secondary'" @click="groupBy = 'name'; reload()">По подкатегориям</button>
       <button class="btn text-sm" :class="groupBy === 'offers' ? '' : 'secondary'" @click="groupBy = 'offers'; reload()">По объявлениям</button>
+      <button class="btn text-sm" :class="groupBy === 'employee' ? '' : 'secondary'" @click="groupBy = 'employee'; reload()">По сотрудникам</button>
+      <button class="btn text-sm" :class="groupBy === 'object' ? '' : 'secondary'" @click="groupBy = 'object'; reload()">По объектам</button>
     </div>
 
     <!-- Сравнение периодов -->
@@ -147,7 +149,7 @@ const isCompare = ref(false)
 
 const sortKey = ref('contacts')
 const sortDir = ref<'asc' | 'desc'>('desc')
-const groupLabel = computed(() => groupBy.value === 'city' ? 'Город' : groupBy.value === 'category' ? 'Категория' : groupBy.value === 'offers' ? '№' : 'Подкатегория')
+const groupLabel = computed(() => groupBy.value === 'city' ? 'Город' : groupBy.value === 'category' ? 'Категория' : groupBy.value === 'offers' ? '№' : groupBy.value === 'employee' ? 'Сотрудник' : groupBy.value === 'object' ? 'Объект' : 'Подкатегория')
 
 function toggleSort(key: string) { if (sortKey.value === key) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'; else { sortKey.value = key; sortDir.value = 'desc' } }
 function sortIcon(key: string) { if (sortKey.value !== key) return ''; return sortDir.value === 'asc' ? '↑' : '↓' }

@@ -120,6 +120,9 @@ func ParseReport(reader io.Reader, fileName string) ([]models.Offer, *excelize.F
 	offers := make([]models.Offer, 0, len(rows)-1)
 	listingColIdx := columnIndexMap["listingNumber"]
 
+	// HR-отчёт: строим маппинг Лист1 (номер объявления → объект)
+	objLookup := buildObjectLookup(f)
+
 	for rowIdx, row := range rows[1:] {
 		offer := parseRow(row, columnIndexMap)
 		// Извлекаем номер объявления из HYPERLINK, если колонка есть
@@ -128,6 +131,16 @@ func ParseReport(reader io.Reader, fileName string) ([]models.Offer, *excelize.F
 			if formula, err := f.GetCellFormula("Sheet1", cellRef); err == nil {
 				offer.ListingNumber = extractListingNumber(formula)
 			}
+		}
+		// Разрешаем VLOOKUP для Объекта через Лист1
+		if offer.ListingNumber != "" {
+			if obj, ok := objLookup[offer.ListingNumber]; ok && offer.Object == "" {
+				offer.Object = obj
+			}
+		}
+		// Чистим #N/A из VLOOKUP-ошибок
+		if offer.Object == "#N/A" || offer.Object == "#VALUE!" || offer.Object == "#REF!" {
+			offer.Object = ""
 		}
 		offers = append(offers, offer)
 	}
@@ -174,6 +187,10 @@ func groupKey(o models.Offer, groupBy string) string {
 		return o.Category
 	case "name":
 		return o.Name
+	case "employee":
+		return o.Employee
+	case "object":
+		return o.Object
 	default:
 		return o.City
 	}
@@ -336,6 +353,16 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 		writeSection("По подкатегориям", "Подкатегория", GetResultStats(GetGroupedStats(report.Offers, "name")), headers)
 		// Топ-10 объявлений
 		writeSection("Топ-10 объявлений по контактам", "Номер объявления", GetTopListings(report.Offers, 10), offerHeaders)
+
+		// HR: сотрудники и объекты (если есть данные)
+		empStats := GetResultStats(GetGroupedStats(report.Offers, "employee"))
+		if len(empStats) > 0 && empStats[0].Key != "" {
+			writeSection("По сотрудникам", "Сотрудник", empStats, headers)
+		}
+		objStats := GetResultStats(GetGroupedStats(report.Offers, "object"))
+		if len(objStats) > 0 && objStats[0].Key != "" {
+			writeSection("По объектам", "Объект", objStats, headers)
+		}
 	}
 
 	file.SetSheetName("Sheet1", "Сводка")
@@ -361,6 +388,8 @@ func parseRow(row []string, columnIndex map[string]int) models.Offer {
 		LookPhone:       getIntegerCell(safeGet(row, columnIndex["lookPhone"])),
 		TargetViewers:   getIntegerCell(safeGet(row, columnIndex["targetViewers"])),
 		Response:        getIntegerCell(safeGet(row, columnIndex["response"])),
+		Object:          safeGet(row, columnIndex["object"]),
+		Employee:        safeGet(row, columnIndex["employee"]),
 	}
 }
 
@@ -394,6 +423,30 @@ func extractListingNumber(raw string) string {
 	return raw
 }
 
+// buildObjectLookup читает Лист1 (номер объявления → объект) для HR-отчётов
+func buildObjectLookup(f *excelize.File) map[string]string {
+	lookup := make(map[string]string)
+	rows, err := f.GetRows("Лист1")
+	if err != nil {
+		return lookup // Лист1 нет — не HR-отчёт
+	}
+	// Лист1: Col A=пусто, Col B=Номер объявления, Col C=Объект
+	for i, row := range rows {
+		if i == 0 {
+			continue // пропускаем заголовок (или пустую строку)
+		}
+		if len(row) < 3 {
+			continue
+		}
+		num := strings.TrimSpace(row[1])
+		obj := strings.TrimSpace(row[2])
+		if num != "" && obj != "" {
+			lookup[num] = obj
+		}
+	}
+	return lookup
+}
+
 func getColumnIndexMap(row []string) (map[string]int, []string) {
 	columnIndex := make(map[string]int)
 	var warnings []string
@@ -408,7 +461,9 @@ func getColumnIndexMap(row []string) (map[string]int, []string) {
 		"favorite":        {"Добавили в избранное", "Добавили в\u00a0избранное"},
 		"name":            {"Название объявления", "Параметр"},
 		"listingNumber":   {"Номер объявления", "Номер\u00a0объявления", "ID объявления", "№ объявления", "ID", "Номер"},
-		"contacts":        {"Контакты", "Отклики"},
+		"contacts":        {"Контакты"},
+		"employee":        {"Сотрудник"},
+		"object":          {"Объект"},
 		"promotion":       {"Расходы на продвижение", "Расходы на\u00a0продвижение"},
 		"viewierCost":     {"Расходы на размещение и целевые действия", "Расходы на\u00a0размещение и\u00a0целевые\u00a0действия", "Расходы на объявления", "Расходы на\u00a0объявления"},
 		"viewWithMessage": {"Написали в чат", "Написали в\u00a0чат"},

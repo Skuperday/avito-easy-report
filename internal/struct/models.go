@@ -6,6 +6,8 @@ type Offer struct {
 	Category        string  `json:"category"`
 	SubCategory     string  `json:"subCategory"`
 	ListingNumber   string  `json:"listingNumber"`
+	Object          string  `json:"object,omitempty"`
+	Employee        string  `json:"employee,omitempty"`
 	Views           int     `json:"views"`
 	Shows           int     `json:"shows"`
 	Favorite        int     `json:"favorite"`
