@@ -5,6 +5,7 @@ type Offer struct {
 	City            string  `json:"city"`
 	Category        string  `json:"category"`
 	SubCategory     string  `json:"subCategory"`
+	ListingNumber   string  `json:"listingNumber"`
 	Views           int     `json:"views"`
 	Shows           int     `json:"shows"`
 	Favorite        int     `json:"favorite"`

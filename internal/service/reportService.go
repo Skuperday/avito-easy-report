@@ -169,7 +169,7 @@ func GetTopListings(offers []models.Offer, limit int) []models.ResultStats {
 	for _, o := range offers {
 		expense := o.Promotion + o.ViewersCost
 		result = append(result, models.ResultStats{
-			Key:             o.Name,
+			Key:             o.ListingNumber,
 			City:            o.City,
 			Shows:           o.Shows,
 			Views:           o.Views,
@@ -205,6 +205,10 @@ func GetTopListings(offers []models.Offer, limit int) []models.ResultStats {
 	// Нумерация после сортировки и обрезки
 	for i := range result {
 		result[i].Number = i + 1
+		// Фолбек: если номер объявления пуст — порядковый номер как строка
+		if result[i].Key == "" {
+			result[i].Key = fmt.Sprintf("%d", i+1)
+		}
 	}
 
 	return result
@@ -303,6 +307,7 @@ func parseRow(row []string, columnIndex map[string]int) models.Offer {
 		City:            safeGet(row, columnIndex["city"]),
 		Category:        safeGet(row, columnIndex["category"]),
 		SubCategory:     safeGet(row, columnIndex["subCategory"]),
+		ListingNumber:   safeGet(row, columnIndex["listingNumber"]),
 		Shows:           getIntegerCell(safeGet(row, columnIndex["shows"])),
 		Views:           getIntegerCell(safeGet(row, columnIndex["views"])),
 		Favorite:        getIntegerCell(safeGet(row, columnIndex["favorite"])),
@@ -337,6 +342,7 @@ func getColumnIndexMap(row []string) (map[string]int, []string) {
 		"views":           {"Просмотры"},
 		"favorite":        {"Добавили в избранное", "Добавили в\u00a0избранное"},
 		"name":            {"Название объявления", "Параметр"},
+		"listingNumber":   {"Номер объявления"},
 		"contacts":        {"Контакты", "Отклики"},
 		"promotion":       {"Расходы на продвижение", "Расходы на\u00a0продвижение"},
 		"viewierCost":     {"Расходы на размещение и целевые действия", "Расходы на\u00a0размещение и\u00a0целевые\u00a0действия", "Расходы на объявления", "Расходы на\u00a0объявления"},

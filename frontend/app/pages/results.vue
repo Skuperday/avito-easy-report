@@ -41,9 +41,9 @@
           </tr></thead>
           <tbody>
             <tr v-for="(s, i) in compareData.delta" :key="s.key">
-              <td class="font-bold">{{ groupBy === 'offers' ? s.number : s.key }}</td>
+              <td class="font-bold">{{ groupBy === 'offers' ? (s.key || s.number) : s.key }}</td>
               <td v-if="groupBy === 'offers'" class="text-xs muted">{{ s.city }}</td>
-              <!-- Показы -->
+              <!-- Показы (compare) -->
               <td class="text-right muted">{{ fmt(earlyRow(i)?.shows) }}</td>
               <td class="text-right">{{ fmt(lateRow(i)?.shows) }}</td>
               <td class="text-right" :style="{ color: s.shows >= 0 ? '#22c55e' : 'var(--destructive)' }">{{ s.shows >= 0 ? '+' : '' }}{{ fmt(s.shows) }}</td>
@@ -108,7 +108,7 @@
             </tr></thead>
             <tbody>
               <tr v-for="s in sorted(r.stats)" :key="s.key">
-                <td class="font-bold">{{ groupBy === 'offers' ? s.number : s.key }}</td>
+                <td class="font-bold">{{ groupBy === 'offers' ? (s.key || s.number) : s.key }}</td>
                 <td v-if="groupBy === 'offers'" class="text-xs muted">{{ s.city }}</td>
                 <td class="text-right">{{ fmt(s.shows) }}</td>
                 <td class="text-right">{{ fmt(s.ppConversion, 1) }}%</td>
