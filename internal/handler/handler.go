@@ -109,7 +109,24 @@ func (h *Handler) DeleteReport(c *gin.Context) {
 
 func (h *Handler) ExportAll(c *gin.Context) {
 	claims := middleware.GetClaims(c)
-	reports := h.store.ListByUser(claims.UserID)
+	allReports := h.store.ListByUser(claims.UserID)
+
+	// Фильтр по ids, если передан
+	var reports []service.StoredReport
+	if idsStr := c.Query("ids"); idsStr != "" {
+		idSet := make(map[string]bool)
+		for _, id := range strings.Split(idsStr, ",") {
+			idSet[strings.TrimSpace(id)] = true
+		}
+		for _, r := range allReports {
+			if idSet[r.ID] {
+				reports = append(reports, r)
+			}
+		}
+	} else {
+		reports = allReports
+	}
+
 	if len(reports) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "нет загруженных отчётов"})
 		return

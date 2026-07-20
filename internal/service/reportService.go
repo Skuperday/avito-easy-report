@@ -274,21 +274,34 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 		return c
 	}
 
-	writeHeaders := func(hdrs []string) {
+	writeHeaders := func(hdrs []string, style int) {
 		for col, h := range hdrs {
-			_ = file.SetCellValue(sheet, cell(col+1, row), h)
+			cellRef := cell(col+1, row)
+			_ = file.SetCellValue(sheet, cellRef, h)
+			_ = file.SetCellStyle(sheet, cellRef, cellRef, style)
 		}
 		row++
 	}
 
+	// Стили
+	titleStyle, _ := file.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 12},
+	})
+	headerStyle, _ := file.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#C6EFCE"}, Pattern: 1},
+	})
+
 	writeSection := func(title string, firstCol string, stats []models.ResultStats, hdrs []string) {
 		// Подставляем название первой колонки
 		hdrs[0] = firstCol
-		// Заголовок секции
-		_ = file.SetCellValue(sheet, cell(1, row), title)
+		// Заголовок секции — жирный
+		titleCell := cell(1, row)
+		_ = file.SetCellValue(sheet, titleCell, title)
+		_ = file.SetCellStyle(sheet, titleCell, titleCell, titleStyle)
 		row++
-		// Шапка таблицы
-		writeHeaders(hdrs)
+		// Шапка таблицы — жирный + зелёная заливка
+		writeHeaders(hdrs, headerStyle)
 		// Данные
 		for _, s := range stats {
 			_ = file.SetCellValue(sheet, cell(1, row), s.Key)

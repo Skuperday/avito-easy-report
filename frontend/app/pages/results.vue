@@ -190,7 +190,11 @@ onMounted(() => {
   reload()
 })
 
-const exportAll = () => window.open(`${config.public.apiBase}/export?token=${auth.token.value}`, '_blank')
+const exportAll = () => {
+  const ids = route.query.ids as string
+  const idsParam = ids ? `&ids=${ids}` : ''
+  window.open(`${config.public.apiBase}/export?token=${auth.token.value}${idsParam}`, '_blank')
+}
 </script>
 
 <style>
