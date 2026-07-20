@@ -92,6 +92,7 @@ type UploadResponse struct {
 	FileName string   `json:"fileName"`
 	Rows     int      `json:"rows"`
 	Warnings []string `json:"warnings,omitempty"`
+	Columns  []string `json:"columns,omitempty"`
 }
 
 type ReportInfo struct {

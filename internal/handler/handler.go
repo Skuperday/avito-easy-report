@@ -28,7 +28,7 @@ func (h *Handler) UploadReport(c *gin.Context) {
 	}
 	defer file.Close()
 
-	offers, excelFile, warnings, err := service.ParseReport(file, header.Filename)
+	offers, excelFile, warnings, foundColumns, err := service.ParseReport(file, header.Filename)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -56,6 +56,7 @@ func (h *Handler) UploadReport(c *gin.Context) {
 		FileName: header.Filename,
 		Rows:     len(offers),
 		Warnings: warnings,
+		Columns:  foundColumns,
 	})
 }
 

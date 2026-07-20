@@ -100,20 +100,20 @@ func (s *ReportStore) Count() int {
 	return len(s.reports)
 }
 
-// ParseReport парсит XLSX из io.Reader и возвращает объявления, файл и предупреждения
-func ParseReport(reader io.Reader, fileName string) ([]models.Offer, *excelize.File, []string, error) {
+// ParseReport парсит XLSX из io.Reader и возвращает объявления, файл, предупреждения и найденные колонки
+func ParseReport(reader io.Reader, fileName string) ([]models.Offer, *excelize.File, []string, []string, error) {
 	f, err := excelize.OpenReader(reader)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("ошибка открытия файла %s: %w", fileName, err)
+		return nil, nil, nil, nil, fmt.Errorf("ошибка открытия файла %s: %w", fileName, err)
 	}
 
 	rows, err := f.GetRows("Sheet1")
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("лист 'Sheet1' не найден в %s: %w", fileName, err)
+		return nil, nil, nil, nil, fmt.Errorf("лист 'Sheet1' не найден в %s: %w", fileName, err)
 	}
 
 	if len(rows) < 2 {
-		return nil, nil, nil, fmt.Errorf("файл %s пуст или содержит только заголовки", fileName)
+		return nil, nil, nil, nil, fmt.Errorf("файл %s пуст или содержит только заголовки", fileName)
 	}
 
 	columnIndexMap, warnings := getColumnIndexMap(rows[0])
@@ -124,7 +124,15 @@ func ParseReport(reader io.Reader, fileName string) ([]models.Offer, *excelize.F
 		offers = append(offers, offer)
 	}
 
-	return offers, f, warnings, nil
+	// Собираем имена найденных колонок
+	var foundColumns []string
+	for key, idx := range columnIndexMap {
+		if idx >= 0 {
+			foundColumns = append(foundColumns, key)
+		}
+	}
+
+	return offers, f, warnings, foundColumns, nil
 }
 
 // GetGroupedStats агрегирует объявления по указанному ключу (city/category/name)
