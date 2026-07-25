@@ -15,10 +15,13 @@ import (
 )
 
 type Handler struct {
-	store *service.ReportStore
+	store       *service.ReportStore
+	objectStore *service.ObjectStore
 }
 
-func NewHandler(store *service.ReportStore) *Handler { return &Handler{store: store} }
+func NewHandler(store *service.ReportStore, objectStore *service.ObjectStore) *Handler {
+	return &Handler{store: store, objectStore: objectStore}
+}
 
 func (h *Handler) UploadReport(c *gin.Context) {
 	file, header, err := c.Request.FormFile("file")
@@ -28,7 +31,7 @@ func (h *Handler) UploadReport(c *gin.Context) {
 	}
 	defer file.Close()
 
-	offers, excelFile, warnings, foundColumns, err := service.ParseReport(file, header.Filename)
+	offers, excelFile, warnings, foundColumns, err := service.ParseReport(file, header.Filename, h.objectStore)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

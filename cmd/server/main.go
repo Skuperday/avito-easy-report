@@ -34,11 +34,13 @@ func main() {
 
 	store := service.NewReportStore()
 	cabinetStore := service.NewCabinetStore()
-	reportHandler := handler.NewHandler(store)
+	objectStore := service.NewObjectStore()
+	reportHandler := handler.NewHandler(store, objectStore)
 	authHandler := handler.NewAuthHandler()
 	cabinetHandler := handler.NewCabinetHandler(cabinetStore, store)
+	objectHandler := handler.NewObjectHandler(objectStore)
 
-	r := setupRouter(cfg, reportHandler, authHandler, cabinetHandler)
+	r := setupRouter(cfg, reportHandler, authHandler, cabinetHandler, objectHandler)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
@@ -68,7 +70,7 @@ func main() {
 	log.Println("Сервер остановлен")
 }
 
-func setupRouter(cfg *config.Config, reportHandler *handler.Handler, authHandler *handler.AuthHandler, cabHandler *handler.CabinetHandler) *gin.Engine {
+func setupRouter(cfg *config.Config, reportHandler *handler.Handler, authHandler *handler.AuthHandler, cabHandler *handler.CabinetHandler, objHandler *handler.ObjectHandler) *gin.Engine {
 	r := gin.Default()
 
 	// CORS
@@ -113,6 +115,11 @@ func setupRouter(cfg *config.Config, reportHandler *handler.Handler, authHandler
 		protected.GET("/cabinets/:id/reports", cabHandler.ListReports)
 		protected.DELETE("/reports/:id", reportHandler.DeleteReport)
 		protected.GET("/export", reportHandler.ExportAll)
+
+		// Маппинг объявление→объект
+		protected.POST("/objects/upload", objHandler.UploadMapping)
+		protected.GET("/objects", objHandler.ListMappings)
+		protected.DELETE("/objects/:listingNumber", objHandler.DeleteMapping)
 
 		admin := protected.Group("/admin")
 		admin.Use(middleware.AdminRequired())

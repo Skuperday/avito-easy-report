@@ -101,7 +101,7 @@ func (s *ReportStore) Count() int {
 }
 
 // ParseReport парсит XLSX из io.Reader и возвращает объявления, файл, предупреждения и найденные колонки
-func ParseReport(reader io.Reader, fileName string) ([]models.Offer, *excelize.File, []string, []string, error) {
+func ParseReport(reader io.Reader, fileName string, objStore *ObjectStore) ([]models.Offer, *excelize.File, []string, []string, error) {
 	f, err := excelize.OpenReader(reader)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("ошибка открытия файла %s: %w", fileName, err)
@@ -132,9 +132,11 @@ func ParseReport(reader io.Reader, fileName string) ([]models.Offer, *excelize.F
 				offer.ListingNumber = extractListingNumber(formula)
 			}
 		}
-		// Разрешаем VLOOKUP для Объекта через Лист1
+		// Разрешаем Объект: 1) ObjectStore (приоритет), 2) Лист1 из файла
 		if offer.ListingNumber != "" {
-			if obj, ok := objLookup[offer.ListingNumber]; ok && offer.Object == "" {
+			if obj, ok := objStore.Get(offer.ListingNumber); ok {
+				offer.Object = obj
+			} else if obj, ok := objLookup[offer.ListingNumber]; ok && offer.Object == "" {
 				offer.Object = obj
 			}
 		}

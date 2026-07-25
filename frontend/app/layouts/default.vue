@@ -42,6 +42,11 @@
             <span class="grid size-7 place-items-center rounded-lg bg-white/5 text-xs font-black uppercase">👥</span>
             <span class="min-w-0"><span class="block truncate">Пользователи</span></span>
           </NuxtLink>
+
+          <NuxtLink to="/objects" class="nav-link" :class="{ 'router-link-active': route.path === '/objects' }">
+            <span class="grid size-7 place-items-center rounded-lg bg-white/5 text-xs font-black uppercase">🏢</span>
+            <span class="min-w-0"><span class="block truncate">Объекты</span></span>
+          </NuxtLink>
         </nav>
 
         <div class="mt-auto grid gap-3 border-t pt-4" style="border-color: var(--sidebar-border)">
