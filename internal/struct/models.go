@@ -55,6 +55,8 @@ type ResultStats struct {
 	AvgContactPrice float64 `json:"avgContactPrice"`
 	Expense         float64 `json:"expense"`
 	Response        int     `json:"response"`
+	AvgResponsePrice    float64 `json:"avgResponsePrice"`
+	ResponseConversion  float64 `json:"responseConversion"`
 }
 
 // TopItem — элемент топ-N

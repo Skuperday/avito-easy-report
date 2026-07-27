@@ -27,11 +27,17 @@
             <th class="text-right" colspan="3">Контакты</th>
             <th class="text-right" colspan="3">Расход</th>
             <th class="text-right" colspan="3">Ср. цена контакта</th>
+            <th class="text-right" colspan="3">Отклики</th>
+            <th class="text-right" colspan="3">Конв. в отклик</th>
+            <th class="text-right" colspan="3">Ср. цена отклика</th>
             <th class="text-right" colspan="3">Избранное</th>
           </tr>
           <tr class="text-xs muted">
             <th></th>
             <th v-if="groupBy === 'offers'"></th>
+            <th class="text-right">П1</th><th class="text-right">П2</th><th class="text-right">Δ</th>
+            <th class="text-right">П1</th><th class="text-right">П2</th><th class="text-right">Δ</th>
+            <th class="text-right">П1</th><th class="text-right">П2</th><th class="text-right">Δ</th>
             <th class="text-right">П1</th><th class="text-right">П2</th><th class="text-right">Δ</th>
             <th class="text-right">П1</th><th class="text-right">П2</th><th class="text-right">Δ</th>
             <th class="text-right">П1</th><th class="text-right">П2</th><th class="text-right">Δ</th>
@@ -73,6 +79,18 @@
               <td class="text-right muted">{{ fmt(earlyRow(i)?.avgContactPrice, 2) }} ₽</td>
               <td class="text-right">{{ fmt(lateRow(i)?.avgContactPrice, 2) }} ₽</td>
               <td class="text-right">{{ s.avgContactPrice >= 0 ? '+' : '' }}{{ fmt(s.avgContactPrice, 2) }} ₽</td>
+              <!-- Отклики -->
+              <td class="text-right muted">{{ fmt(earlyRow(i)?.response) }}</td>
+              <td class="text-right">{{ fmt(lateRow(i)?.response) }}</td>
+              <td class="text-right" :style="{ color: s.response >= 0 ? '#22c55e' : 'var(--destructive)' }">{{ s.response >= 0 ? '+' : '' }}{{ fmt(s.response) }}</td>
+              <!-- Конв. в отклик -->
+              <td class="text-right muted">{{ fmt(earlyRow(i)?.responseConversion, 1) }}%</td>
+              <td class="text-right">{{ fmt(lateRow(i)?.responseConversion, 1) }}%</td>
+              <td class="text-right">{{ s.responseConversion >= 0 ? '+' : '' }}{{ fmt(s.responseConversion, 1) }}%</td>
+              <!-- Ср. цена отклика -->
+              <td class="text-right muted">{{ fmt(earlyRow(i)?.avgResponsePrice, 2) }} ₽</td>
+              <td class="text-right">{{ fmt(lateRow(i)?.avgResponsePrice, 2) }} ₽</td>
+              <td class="text-right">{{ s.avgResponsePrice >= 0 ? '+' : '' }}{{ fmt(s.avgResponsePrice, 2) }} ₽</td>
               <!-- Избранное -->
               <td class="text-right muted">{{ fmt(earlyRow(i)?.favorite) }}</td>
               <td class="text-right">{{ fmt(lateRow(i)?.favorite) }}</td>
@@ -106,6 +124,9 @@
               <th class="text-right cursor-pointer select-none" @click="toggleSort('contacts')">Контакты <span class="muted">{{ sortIcon('contacts') }}</span></th>
               <th class="text-right cursor-pointer select-none" @click="toggleSort('expense')">Расход <span class="muted">{{ sortIcon('expense') }}</span></th>
               <th class="text-right cursor-pointer select-none" @click="toggleSort('avgContactPrice')">Ср. цена контакта <span class="muted">{{ sortIcon('avgContactPrice') }}</span></th>
+              <th class="text-right cursor-pointer select-none" @click="toggleSort('response')">Отклики <span class="muted">{{ sortIcon('response') }}</span></th>
+              <th class="text-right cursor-pointer select-none" @click="toggleSort('responseConversion')">Конв. в отклик <span class="muted">{{ sortIcon('responseConversion') }}</span></th>
+              <th class="text-right cursor-pointer select-none" @click="toggleSort('avgResponsePrice')">Ср. цена отклика <span class="muted">{{ sortIcon('avgResponsePrice') }}</span></th>
               <th class="text-right cursor-pointer select-none" @click="toggleSort('favorite')">Избранное <span class="muted">{{ sortIcon('favorite') }}</span></th>
             </tr></thead>
             <tbody>
@@ -119,6 +140,9 @@
                 <td class="text-right">{{ fmt(s.contacts) }}</td>
                 <td class="text-right">{{ fmt(s.expense, 2) }} ₽</td>
                 <td class="text-right">{{ fmt(s.avgContactPrice, 2) }} ₽</td>
+                <td class="text-right">{{ fmt(s.response) }}</td>
+                <td class="text-right">{{ fmt(s.responseConversion, 1) }}%</td>
+                <td class="text-right">{{ fmt(s.avgResponsePrice, 2) }} ₽</td>
                 <td class="text-right">{{ fmt(s.favorite) }}</td>
               </tr>
             </tbody>

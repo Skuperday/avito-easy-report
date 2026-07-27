@@ -221,6 +221,8 @@ func GetTopListings(offers []models.Offer, limit int) []models.ResultStats {
 			ViewWithMessage: o.ViewWithMessage,
 			LookPhone:       o.LookPhone,
 			Response:        o.Response,
+			AvgResponsePrice:    canDivByZero(expense, float64(o.Response)),
+			ResponseConversion:  canDivByZero(float64(o.Views), float64(o.Response)) * 100,
 		})
 	}
 
@@ -270,6 +272,8 @@ func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 			ViewWithMessage: stat.ViewWithMessage,
 			LookPhone:       stat.LookPhone,
 			Response:        stat.Response,
+			AvgResponsePrice:    canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Response)),
+			ResponseConversion:  canDivByZero(float64(stat.Views), float64(stat.Response)) * 100,
 		}
 		result = append(result, resultStat)
 	}
@@ -282,10 +286,10 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 	defer file.Close()
 
 	sheet := "Sheet1"
-	_ = file.SetColWidth(sheet, "A", "I", 15)
+	_ = file.SetColWidth(sheet, "A", "M", 15)
 
-	headers := []string{"", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Избранное"}
-	offerHeaders := []string{"Номер объявления", "Город", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта"}
+	headers := []string{"", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика", "Избранное"}
+	offerHeaders := []string{"Номер объявления", "Город", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика"}
 
 	row := 1
 	cell := func(col, r int) string {
@@ -336,7 +340,10 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 			_ = file.SetCellValue(sheet, cell(6+offset, row), s.Contacts)
 			_ = file.SetCellValue(sheet, cell(7+offset, row), fmt.Sprintf("%.2f", s.Expense))
 			_ = file.SetCellValue(sheet, cell(8+offset, row), fmt.Sprintf("%.2f", s.AvgContactPrice))
-			_ = file.SetCellValue(sheet, cell(9+offset, row), s.Favorite)
+			_ = file.SetCellValue(sheet, cell(9+offset, row), s.Response)
+			_ = file.SetCellValue(sheet, cell(10+offset, row), fmt.Sprintf("%.2f%%", s.ResponseConversion))
+			_ = file.SetCellValue(sheet, cell(11+offset, row), fmt.Sprintf("%.2f", s.AvgResponsePrice))
+			_ = file.SetCellValue(sheet, cell(12+offset, row), s.Favorite)
 			row++
 		}
 		row++ // пустая строка-разделитель

@@ -21,6 +21,9 @@ export interface ResultStats {
   avgViewPrice: number
   avgContactPrice: number
   expense: number
+  response?: number
+  avgResponsePrice?: number
+  responseConversion?: number
 }
 
 export interface StatsResponse {
