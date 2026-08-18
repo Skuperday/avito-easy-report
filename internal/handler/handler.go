@@ -15,10 +15,13 @@ import (
 )
 
 type Handler struct {
-	store *service.ReportStore
+	store       *service.ReportStore
+	objectStore *service.ObjectStore
 }
 
-func NewHandler(store *service.ReportStore) *Handler { return &Handler{store: store} }
+func NewHandler(store *service.ReportStore, objectStore *service.ObjectStore) *Handler {
+	return &Handler{store: store, objectStore: objectStore}
+}
 
 func (h *Handler) UploadReport(c *gin.Context) {
 	file, header, err := c.Request.FormFile("file")
@@ -28,7 +31,7 @@ func (h *Handler) UploadReport(c *gin.Context) {
 	}
 	defer file.Close()
 
-	offers, excelFile, warnings, err := service.ParseReport(file, header.Filename)
+	offers, excelFile, warnings, foundColumns, err := service.ParseReport(file, header.Filename, h.objectStore)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -56,6 +59,7 @@ func (h *Handler) UploadReport(c *gin.Context) {
 		FileName: header.Filename,
 		Rows:     len(offers),
 		Warnings: warnings,
+		Columns:  foundColumns,
 	})
 }
 
@@ -78,8 +82,13 @@ func (h *Handler) GetStats(c *gin.Context) {
 	}
 
 	groupBy := c.DefaultQuery("groupBy", "city")
-	statsMap := service.GetGroupedStats(report.Offers, groupBy)
-	resultStats := service.GetResultStats(statsMap)
+	var resultStats []models.ResultStats
+	if groupBy == "offers" {
+		resultStats = service.GetTopListings(report.Offers, 10)
+	} else {
+		statsMap := service.GetGroupedStats(report.Offers, groupBy)
+		resultStats = service.GetResultStats(statsMap)
+	}
 	summary := service.GetSummary(report.Offers)
 
 	c.JSON(http.StatusOK, models.StatsResponse{
@@ -103,7 +112,24 @@ func (h *Handler) DeleteReport(c *gin.Context) {
 
 func (h *Handler) ExportAll(c *gin.Context) {
 	claims := middleware.GetClaims(c)
-	reports := h.store.ListByUser(claims.UserID)
+	allReports := h.store.ListByUser(claims.UserID)
+
+	// Фильтр по ids, если передан
+	var reports []service.StoredReport
+	if idsStr := c.Query("ids"); idsStr != "" {
+		idSet := make(map[string]bool)
+		for _, id := range strings.Split(idsStr, ",") {
+			idSet[strings.TrimSpace(id)] = true
+		}
+		for _, r := range allReports {
+			if idSet[r.ID] {
+				reports = append(reports, r)
+			}
+		}
+	} else {
+		reports = allReports
+	}
+
 	if len(reports) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "нет загруженных отчётов"})
 		return
@@ -131,8 +157,13 @@ func (h *Handler) MultiStats(c *gin.Context) {
 		if report == nil || !h.ownsReport(c, report) {
 			continue
 		}
-		statsMap := service.GetGroupedStats(report.Offers, groupBy)
-		resultStats := service.GetResultStats(statsMap)
+		var resultStats []models.ResultStats
+		if groupBy == "offers" {
+			resultStats = service.GetTopListings(report.Offers, 10)
+		} else {
+			statsMap := service.GetGroupedStats(report.Offers, groupBy)
+			resultStats = service.GetResultStats(statsMap)
+		}
 		summary := service.GetSummary(report.Offers)
 		result = append(result, models.StatsResponse{
 			ReportID: report.ID, FileName: report.FileName,
@@ -156,6 +187,12 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	}
 
 	groupBy := c.DefaultQuery("groupBy", "city")
+
+	// Для режима "объявления" сравнение идёт по названию объявления
+	compareGroupBy := groupBy
+	if groupBy == "offers" {
+		compareGroupBy = "name"
+	}
 
 	type indexedReport struct {
 		id      string
@@ -183,7 +220,7 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	early := reports[0].offers
 	late := reports[len(reports)-1].offers
 
-	result := service.ComparePeriods(early, late, groupBy)
+	result := service.ComparePeriods(early, late, compareGroupBy)
 	c.JSON(http.StatusOK, result)
 }
 

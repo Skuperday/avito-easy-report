@@ -150,6 +150,43 @@
   color-scheme: dark;
 }
 
+/* === Соник-X (синяя скоростная, цвета Соника: синий ёж, золотые кольца, красные кроссовки) === */
+[data-theme="sonic-x"] {
+  --radius: 0.625rem;
+  --background: oklch(0.17 0.05 265);           /* глубокий синий, ночная трасса */
+  --foreground: oklch(0.96 0.01 250);            /* белые перчатки */
+  --card: oklch(0.22 0.06 265);
+  --card-foreground: oklch(0.96 0.01 250);
+  --popover: oklch(0.22 0.06 265);
+  --popover-foreground: oklch(0.96 0.01 250);
+  --primary: oklch(0.55 0.18 262);               /* фирменный синий Соника */
+  --primary-foreground: oklch(0.98 0.005 250);
+  --secondary: oklch(0.28 0.06 265);
+  --secondary-foreground: oklch(0.93 0.02 250);
+  --muted: oklch(0.26 0.05 265);
+  --muted-foreground: oklch(0.68 0.04 255);
+  --accent: oklch(0.8 0.15 88);                  /* золотые кольца */
+  --accent-foreground: oklch(0.28 0.06 80);
+  --destructive: oklch(0.6 0.21 25);             /* красные кроссовки */
+  --border: oklch(0.32 0.06 265);
+  --input: oklch(0.28 0.05 265);
+  --ring: oklch(0.62 0.15 260);
+  --chart-1: oklch(0.55 0.18 262);               /* синий Соника */
+  --chart-2: oklch(0.8 0.15 88);                 /* кольца */
+  --chart-3: oklch(0.6 0.21 25);                 /* кроссовки */
+  --chart-4: oklch(0.65 0.15 150);               /* изумрудные глаза */
+  --chart-5: oklch(0.84 0.06 60);                /* персиковый (мордочка) */
+  --sidebar: oklch(0.19 0.055 265);
+  --sidebar-foreground: oklch(0.95 0.01 250);
+  --sidebar-primary: oklch(0.55 0.18 262);
+  --sidebar-primary-foreground: oklch(0.98 0.005 250);
+  --sidebar-accent: oklch(0.28 0.07 265);
+  --sidebar-accent-foreground: oklch(0.93 0.02 250);
+  --sidebar-border: oklch(0.3 0.06 265);
+  --sidebar-ring: oklch(0.62 0.15 260);
+  color-scheme: dark;
+}
+
 @layer base {
   * {
     border-color: var(--border);

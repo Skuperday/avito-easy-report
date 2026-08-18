@@ -100,31 +100,62 @@ func (s *ReportStore) Count() int {
 	return len(s.reports)
 }
 
-// ParseReport парсит XLSX из io.Reader и возвращает объявления, файл и предупреждения
-func ParseReport(reader io.Reader, fileName string) ([]models.Offer, *excelize.File, []string, error) {
+// ParseReport парсит XLSX из io.Reader и возвращает объявления, файл, предупреждения и найденные колонки
+func ParseReport(reader io.Reader, fileName string, objStore *ObjectStore) ([]models.Offer, *excelize.File, []string, []string, error) {
 	f, err := excelize.OpenReader(reader)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("ошибка открытия файла %s: %w", fileName, err)
+		return nil, nil, nil, nil, fmt.Errorf("ошибка открытия файла %s: %w", fileName, err)
 	}
 
 	rows, err := f.GetRows("Sheet1")
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("лист 'Sheet1' не найден в %s: %w", fileName, err)
+		return nil, nil, nil, nil, fmt.Errorf("лист 'Sheet1' не найден в %s: %w", fileName, err)
 	}
 
 	if len(rows) < 2 {
-		return nil, nil, nil, fmt.Errorf("файл %s пуст или содержит только заголовки", fileName)
+		return nil, nil, nil, nil, fmt.Errorf("файл %s пуст или содержит только заголовки", fileName)
 	}
 
 	columnIndexMap, warnings := getColumnIndexMap(rows[0])
 	offers := make([]models.Offer, 0, len(rows)-1)
+	listingColIdx := columnIndexMap["listingNumber"]
 
-	for _, row := range rows[1:] {
+	// HR-отчёт: строим маппинг Лист1 (номер объявления → объект)
+	objLookup := buildObjectLookup(f)
+
+	for rowIdx, row := range rows[1:] {
 		offer := parseRow(row, columnIndexMap)
+		// Извлекаем номер объявления из HYPERLINK, если колонка есть
+		if listingColIdx >= 0 {
+			cellRef, _ := excelize.CoordinatesToCellName(listingColIdx+1, rowIdx+2)
+			if formula, err := f.GetCellFormula("Sheet1", cellRef); err == nil {
+				offer.ListingNumber = extractListingNumber(formula)
+			}
+		}
+		// Разрешаем Объект: 1) ObjectStore (приоритет), 2) Лист1 из файла
+		if offer.ListingNumber != "" {
+			if obj, ok := objStore.Get(offer.ListingNumber); ok {
+				offer.Object = obj
+			} else if obj, ok := objLookup[offer.ListingNumber]; ok && offer.Object == "" {
+				offer.Object = obj
+			}
+		}
+		// Чистим #N/A из VLOOKUP-ошибок
+		if offer.Object == "#N/A" || offer.Object == "#VALUE!" || offer.Object == "#REF!" {
+			offer.Object = ""
+		}
 		offers = append(offers, offer)
 	}
 
-	return offers, f, warnings, nil
+	// Собираем имена найденных колонок
+	var foundColumns []string
+	for key, idx := range columnIndexMap {
+		if idx >= 0 {
+			foundColumns = append(foundColumns, key)
+		}
+	}
+
+	return offers, f, warnings, foundColumns, nil
 }
 
 // GetGroupedStats агрегирует объявления по указанному ключу (city/category/name)
@@ -157,10 +188,67 @@ func groupKey(o models.Offer, groupBy string) string {
 	case "category":
 		return o.Category
 	case "name":
-		return o.SubCategory
+		return o.Name
+	case "employee":
+		return o.Employee
+	case "object":
+		return o.Object
 	default:
 		return o.City
 	}
+}
+
+// GetTopListings возвращает топ-N индивидуальных объявлений по контактам (без агрегации)
+func GetTopListings(offers []models.Offer, limit int) []models.ResultStats {
+	result := make([]models.ResultStats, 0, len(offers))
+	for _, o := range offers {
+		expense := o.Promotion + o.ViewersCost
+		result = append(result, models.ResultStats{
+			Key:             o.ListingNumber,
+			City:            o.City,
+			Shows:           o.Shows,
+			Views:           o.Views,
+			Contacts:        o.Contacts,
+			Favorite:        o.Favorite,
+			Promotion:       o.Promotion,
+			ViewersCost:     o.ViewersCost,
+			Expense:         expense,
+			PPConversion:    canDivByZero(float64(o.Views), float64(o.Shows)) * 100,
+			PKConversion:    canDivByZero(float64(o.Contacts), float64(o.Views)) * 100,
+			AvgContactPrice: canDivByZero(expense, float64(o.Contacts)),
+			AvgViewPrice:    canDivByZero(expense, float64(o.Views)),
+			TargetViewers:   o.TargetViewers,
+			ViewWithMessage: o.ViewWithMessage,
+			LookPhone:       o.LookPhone,
+			Response:        o.Response,
+			AvgResponsePrice:    canDivByZero(expense, float64(o.Response)),
+			ResponseConversion:  canDivByZero(float64(o.Views), float64(o.Response)) * 100,
+		})
+	}
+
+	// Сортировка по убыванию контактов
+	for i := 0; i < len(result); i++ {
+		for j := i + 1; j < len(result); j++ {
+			if result[j].Contacts > result[i].Contacts {
+				result[i], result[j] = result[j], result[i]
+			}
+		}
+	}
+
+	if limit > 0 && limit < len(result) {
+		result = result[:limit]
+	}
+
+	// Нумерация после сортировки и обрезки
+	for i := range result {
+		result[i].Number = i + 1
+		// Фолбек: если номер объявления пуст — порядковый номер как строка
+		if result[i].Key == "" {
+			result[i].Key = fmt.Sprintf("%d", i+1)
+		}
+	}
+
+	return result
 }
 
 // GetResultStats вычисляет производные метрики
@@ -179,82 +267,114 @@ func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 			PKConversion:    canDivByZero(float64(stat.Contacts), float64(stat.Views)) * 100,
 			AvgViewPrice:    canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Views)),
 			AvgContactPrice: canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Contacts)),
+			Expense:         stat.Promotion + stat.ViewersCost,
 			TargetViewers:   stat.TargetViewers,
 			ViewWithMessage: stat.ViewWithMessage,
 			LookPhone:       stat.LookPhone,
 			Response:        stat.Response,
+			AvgResponsePrice:    canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Response)),
+			ResponseConversion:  canDivByZero(float64(stat.Views), float64(stat.Response)) * 100,
 		}
 		result = append(result, resultStat)
 	}
 	return result
 }
 
-// ExportXLSX формирует сводный result.xlsx в writer
+// ExportXLSX формирует сводный result.xlsx на одном листе: города, категории, подкатегории, топ-10 объявлений
 func ExportXLSX(reports []StoredReport, w io.Writer) error {
 	file := excelize.NewFile()
 	defer file.Close()
 
-	headers := []string{
-		"Город",
-		"Показы",
-		"Просмотры",
-		"Контакты",
-		"ПП Конверсия",
-		"ПК Конверсия",
-		"Избранное",
-		"Продвижение",
-		"Затраты на просмотры",
-		"Целевые просмотры",
-		"Написали в чат",
-		"Смотрели телефон",
-		"Средняя цена просмотра",
-		"Средняя цена контакта",
+	sheet := "Sheet1"
+	_ = file.SetColWidth(sheet, "A", "M", 15)
+
+	headers := []string{"", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика", "Избранное"}
+	offerHeaders := []string{"Номер объявления", "Город", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика"}
+
+	row := 1
+	cell := func(col, r int) string {
+		c, _ := excelize.CoordinatesToCellName(col, r)
+		return c
 	}
 
-	for i, report := range reports {
-		stats := GetGroupedStats(report.Offers, "city")
-		resultStats := GetResultStats(stats)
-		sheetName := keepNumbersAndUnderscores(report.FileName)
+	writeHeaders := func(hdrs []string, style int) {
+		for col, h := range hdrs {
+			cellRef := cell(col+1, row)
+			_ = file.SetCellValue(sheet, cellRef, h)
+			_ = file.SetCellStyle(sheet, cellRef, cellRef, style)
+		}
+		row++
+	}
 
-		// Первый лист переименовываем, остальные создаём
-		var index int
-		var err error
-		if i == 0 {
-			file.SetSheetName("Sheet1", sheetName)
-			index = 0
-		} else {
-			index, err = file.NewSheet(sheetName)
-			if err != nil {
-				return fmt.Errorf("ошибка создания листа %s: %w", sheetName, err)
+	// Стили
+	titleStyle, _ := file.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 12},
+	})
+	headerStyle, _ := file.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#C6EFCE"}, Pattern: 1},
+	})
+
+	writeSection := func(title string, firstCol string, stats []models.ResultStats, hdrs []string) {
+		// Подставляем название первой колонки
+		hdrs[0] = firstCol
+		// Заголовок секции — жирный
+		titleCell := cell(1, row)
+		_ = file.SetCellValue(sheet, titleCell, title)
+		_ = file.SetCellStyle(sheet, titleCell, titleCell, titleStyle)
+		row++
+		// Шапка таблицы — жирный + зелёная заливка
+		writeHeaders(hdrs, headerStyle)
+		// Данные
+		for _, s := range stats {
+			_ = file.SetCellValue(sheet, cell(1, row), s.Key)
+			offset := 0
+			if hdrs[0] == "Номер объявления" {
+				_ = file.SetCellValue(sheet, cell(2, row), s.City)
+				offset = 1
 			}
+			_ = file.SetCellValue(sheet, cell(2+offset, row), s.Shows)
+			_ = file.SetCellValue(sheet, cell(3+offset, row), fmt.Sprintf("%.2f%%", s.PPConversion))
+			_ = file.SetCellValue(sheet, cell(4+offset, row), s.Views)
+			_ = file.SetCellValue(sheet, cell(5+offset, row), fmt.Sprintf("%.2f%%", s.PKConversion))
+			_ = file.SetCellValue(sheet, cell(6+offset, row), s.Contacts)
+			_ = file.SetCellValue(sheet, cell(7+offset, row), fmt.Sprintf("%.2f", s.Expense))
+			_ = file.SetCellValue(sheet, cell(8+offset, row), fmt.Sprintf("%.2f", s.AvgContactPrice))
+			_ = file.SetCellValue(sheet, cell(9+offset, row), s.Response)
+			_ = file.SetCellValue(sheet, cell(10+offset, row), fmt.Sprintf("%.2f%%", s.ResponseConversion))
+			_ = file.SetCellValue(sheet, cell(11+offset, row), fmt.Sprintf("%.2f", s.AvgResponsePrice))
+			_ = file.SetCellValue(sheet, cell(12+offset, row), s.Favorite)
+			row++
 		}
+		row++ // пустая строка-разделитель
+	}
 
-		file.SetActiveSheet(index)
-		_ = file.SetColWidth(sheetName, "A", "N", 15)
+	for _, report := range reports {
+		// Название отчёта
+		_ = file.SetCellValue(sheet, cell(1, row), "Отчёт: "+report.FileName)
+		row += 2
 
-		for col, header := range headers {
-			_ = file.SetCellValue(sheetName, getCellName(col+1, 1), header)
+		// Города
+		writeSection("По городам", "Город", GetResultStats(GetGroupedStats(report.Offers, "city")), headers)
+		// Категории
+		writeSection("По категориям", "Категория", GetResultStats(GetGroupedStats(report.Offers, "category")), headers)
+		// Подкатегории
+		writeSection("По подкатегориям", "Подкатегория", GetResultStats(GetGroupedStats(report.Offers, "name")), headers)
+		// Топ-10 объявлений
+		writeSection("Топ-10 объявлений по контактам", "Номер объявления", GetTopListings(report.Offers, 10), offerHeaders)
+
+		// HR: сотрудники и объекты (если есть данные)
+		empStats := GetResultStats(GetGroupedStats(report.Offers, "employee"))
+		if len(empStats) > 0 && empStats[0].Key != "" {
+			writeSection("По сотрудникам", "Сотрудник", empStats, headers)
 		}
-
-		for rowIdx, stat := range resultStats {
-			row := rowIdx + 2
-			_ = file.SetCellValue(sheetName, getCellName(1, row), stat.Key)
-			_ = file.SetCellValue(sheetName, getCellName(2, row), stat.Shows)
-			_ = file.SetCellValue(sheetName, getCellName(3, row), stat.Views)
-			_ = file.SetCellValue(sheetName, getCellName(4, row), stat.Contacts)
-			_ = file.SetCellValue(sheetName, getCellName(5, row), fmt.Sprintf("%.2f%%", stat.PPConversion))
-			_ = file.SetCellValue(sheetName, getCellName(6, row), fmt.Sprintf("%.2f%%", stat.PKConversion))
-			_ = file.SetCellValue(sheetName, getCellName(7, row), stat.Favorite)
-			_ = file.SetCellValue(sheetName, getCellName(8, row), stat.Promotion)
-			_ = file.SetCellValue(sheetName, getCellName(9, row), stat.ViewersCost)
-			_ = file.SetCellValue(sheetName, getCellName(10, row), stat.TargetViewers)
-			_ = file.SetCellValue(sheetName, getCellName(11, row), stat.ViewWithMessage)
-			_ = file.SetCellValue(sheetName, getCellName(12, row), stat.LookPhone)
-			_ = file.SetCellValue(sheetName, getCellName(13, row), fmt.Sprintf("%.2f", stat.AvgViewPrice))
-			_ = file.SetCellValue(sheetName, getCellName(14, row), fmt.Sprintf("%.2f", stat.AvgContactPrice))
+		objStats := GetResultStats(GetGroupedStats(report.Offers, "object"))
+		if len(objStats) > 0 && objStats[0].Key != "" {
+			writeSection("По объектам", "Объект", objStats, headers)
 		}
 	}
 
+	file.SetSheetName("Sheet1", "Сводка")
 	return file.Write(w)
 }
 
@@ -265,6 +385,7 @@ func parseRow(row []string, columnIndex map[string]int) models.Offer {
 		City:            safeGet(row, columnIndex["city"]),
 		Category:        safeGet(row, columnIndex["category"]),
 		SubCategory:     safeGet(row, columnIndex["subCategory"]),
+		ListingNumber:   safeGet(row, columnIndex["listingNumber"]),
 		Shows:           getIntegerCell(safeGet(row, columnIndex["shows"])),
 		Views:           getIntegerCell(safeGet(row, columnIndex["views"])),
 		Favorite:        getIntegerCell(safeGet(row, columnIndex["favorite"])),
@@ -276,6 +397,8 @@ func parseRow(row []string, columnIndex map[string]int) models.Offer {
 		LookPhone:       getIntegerCell(safeGet(row, columnIndex["lookPhone"])),
 		TargetViewers:   getIntegerCell(safeGet(row, columnIndex["targetViewers"])),
 		Response:        getIntegerCell(safeGet(row, columnIndex["response"])),
+		Object:          safeGet(row, columnIndex["object"]),
+		Employee:        safeGet(row, columnIndex["employee"]),
 	}
 }
 
@@ -284,6 +407,53 @@ func safeGet(row []string, index int) string {
 		return ""
 	}
 	return row[index]
+}
+
+// extractListingNumber вытаскивает номер объявления из HYPERLINK-формулы Avito
+// Формат: =HYPERLINK("url","номер") → "номер"
+func extractListingNumber(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	// Ищем последний аргумент в кавычках: ,"число")
+	lastQuote := strings.LastIndex(raw, "\"")
+	if lastQuote < 0 {
+		return raw // не формула — возвращаем как есть
+	}
+	prevQuote := strings.LastIndex(raw[:lastQuote], "\"")
+	if prevQuote < 0 {
+		return raw
+	}
+	inner := raw[prevQuote+1 : lastQuote]
+	// Если внутри только цифры — это номер объявления
+	if len(inner) > 0 {
+		return inner
+	}
+	return raw
+}
+
+// buildObjectLookup читает Лист1 (номер объявления → объект) для HR-отчётов
+func buildObjectLookup(f *excelize.File) map[string]string {
+	lookup := make(map[string]string)
+	rows, err := f.GetRows("Лист1")
+	if err != nil {
+		return lookup // Лист1 нет — не HR-отчёт
+	}
+	// Лист1: Col A=пусто, Col B=Номер объявления, Col C=Объект
+	for i, row := range rows {
+		if i == 0 {
+			continue // пропускаем заголовок (или пустую строку)
+		}
+		if len(row) < 3 {
+			continue
+		}
+		num := strings.TrimSpace(row[1])
+		obj := strings.TrimSpace(row[2])
+		if num != "" && obj != "" {
+			lookup[num] = obj
+		}
+	}
+	return lookup
 }
 
 func getColumnIndexMap(row []string) (map[string]int, []string) {
@@ -299,7 +469,10 @@ func getColumnIndexMap(row []string) (map[string]int, []string) {
 		"views":           {"Просмотры"},
 		"favorite":        {"Добавили в избранное", "Добавили в\u00a0избранное"},
 		"name":            {"Название объявления", "Параметр"},
-		"contacts":        {"Контакты", "Отклики"},
+		"listingNumber":   {"Номер объявления", "Номер\u00a0объявления", "ID объявления", "№ объявления", "ID", "Номер"},
+		"contacts":        {"Контакты"},
+		"employee":        {"Сотрудник"},
+		"object":          {"Объект"},
 		"promotion":       {"Расходы на продвижение", "Расходы на\u00a0продвижение"},
 		"viewierCost":     {"Расходы на размещение и целевые действия", "Расходы на\u00a0размещение и\u00a0целевые\u00a0действия", "Расходы на объявления", "Расходы на\u00a0объявления"},
 		"viewWithMessage": {"Написали в чат", "Написали в\u00a0чат"},
@@ -437,6 +610,7 @@ func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareRe
 				Key: s.Key, Shows: s.Shows, Views: s.Views, Contacts: s.Contacts,
 				PPConversion: s.PPConversion, PKConversion: s.PKConversion,
 				AvgViewPrice: s.AvgViewPrice, AvgContactPrice: s.AvgContactPrice,
+				Expense: s.Expense,
 			})
 			continue
 		}
@@ -455,6 +629,7 @@ func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareRe
 			PKConversion:    s.PKConversion - e.PKConversion,
 			AvgViewPrice:    s.AvgViewPrice - e.AvgViewPrice,
 			AvgContactPrice: s.AvgContactPrice - e.AvgContactPrice,
+			Expense:         s.Expense - e.Expense,
 		})
 	}
 

@@ -5,6 +5,9 @@ type Offer struct {
 	City            string  `json:"city"`
 	Category        string  `json:"category"`
 	SubCategory     string  `json:"subCategory"`
+	ListingNumber   string  `json:"listingNumber"`
+	Object          string  `json:"object,omitempty"`
+	Employee        string  `json:"employee,omitempty"`
 	Views           int     `json:"views"`
 	Shows           int     `json:"shows"`
 	Favorite        int     `json:"favorite"`
@@ -34,7 +37,9 @@ type Stats struct {
 
 // ResultStats — строка результата с группировкой
 type ResultStats struct {
-	Key             string  `json:"key"`
+	Number         int     `json:"number,omitempty"`
+	Key            string  `json:"key"`
+	City           string  `json:"city,omitempty"`
 	Views           int     `json:"views"`
 	Shows           int     `json:"shows"`
 	Favorite        int     `json:"favorite"`
@@ -48,7 +53,10 @@ type ResultStats struct {
 	PKConversion    float64 `json:"pkConversion"`
 	AvgViewPrice    float64 `json:"avgViewPrice"`
 	AvgContactPrice float64 `json:"avgContactPrice"`
+	Expense         float64 `json:"expense"`
 	Response        int     `json:"response"`
+	AvgResponsePrice    float64 `json:"avgResponsePrice"`
+	ResponseConversion  float64 `json:"responseConversion"`
 }
 
 // TopItem — элемент топ-N
@@ -88,6 +96,7 @@ type UploadResponse struct {
 	FileName string   `json:"fileName"`
 	Rows     int      `json:"rows"`
 	Warnings []string `json:"warnings,omitempty"`
+	Columns  []string `json:"columns,omitempty"`
 }
 
 type ReportInfo struct {
