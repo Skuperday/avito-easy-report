@@ -3,6 +3,7 @@ name: Deploy to VPS
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -19,8 +20,8 @@ jobs:
             cd /opt/avito
 
             echo ">>> Pulling latest changes..."
-            git checkout develop
-            git pull origin develop
+            git checkout main
+            git pull origin main
 
             echo ">>> Building and deploying..."
             docker compose -f docker-compose.yml build
