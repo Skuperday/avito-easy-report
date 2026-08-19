@@ -7,7 +7,7 @@ on:
     inputs:
       branch:
         description: 'Ветка для деплоя'
-        required: false
+        required: true
         default: 'main'
 
 jobs:
@@ -24,13 +24,14 @@ jobs:
             set -e
             cd /opt/avito
 
-            BRANCH="${{ github.event.inputs.branch || 'main' }}"
+            BRANCH="${{ inputs.branch || github.ref_name }}"
             echo ">>> Deploying branch: $BRANCH"
 
             echo ">>> Pulling latest changes..."
-            git fetch --all
-            git checkout "$BRANCH"
-            git pull origin "$BRANCH"
+            git check-ref-format --branch "$BRANCH"
+            git fetch origin "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
+            git checkout -f -B "$BRANCH" "origin/$BRANCH"
+            git reset --hard "origin/$BRANCH"
 
             echo ">>> Building and deploying..."
             docker compose -f docker-compose.yml build

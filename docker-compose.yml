@@ -5,12 +5,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: avito
-      POSTGRES_PASSWORD: avito
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-avito}
       POSTGRES_DB: avito
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "15432:5432"  # 5432 занят зарезервированным диапазоном Windows (Hyper-V)
+      - "15432:5432"  # 5432 занят локальным brew postgres
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U avito"]
       interval: 3s
@@ -29,9 +29,9 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: avito
-      DB_PASSWORD: avito
+      DB_PASSWORD: ${DB_PASSWORD:-avito}
       DB_NAME: avito
-      JWT_SECRET: avito-secret-change-in-production
+      JWT_SECRET: ${JWT_SECRET:-avito-secret-change-in-production}
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,5 +47,20 @@ services:
     depends_on:
       - backend
 
+  caddy:
+    image: caddy:alpine
+    container_name: avito-caddy
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+
 volumes:
   pgdata:
+  caddy_data:
