@@ -104,7 +104,10 @@
     <!-- Обычный просмотр -->
     <template v-else>
       <div v-for="r in data.reports" :key="r.reportId" class="mb-6">
-        <h2 class="text-sm font-bold mb-1">{{ r.fileName }}</h2>
+        <div class="flex items-center gap-2 mb-1">
+          <h2 class="text-sm font-bold">{{ r.fileName }}</h2>
+          <span class="badge text-xs">{{ r.reportType === 'hr' ? 'HR' : 'Обычный' }}</span>
+        </div>
         <p class="text-xs muted mb-3">
           {{ r.summary.totalShows.toLocaleString('ru') }} показов ·
           {{ r.summary.totalViews.toLocaleString('ru') }} просмотров ·

@@ -1,9 +1,9 @@
 package handler
 
 import (
-	models "avito-easy-report/internal/struct"
 	"avito-easy-report/internal/middleware"
 	"avito-easy-report/internal/service"
+	models "avito-easy-report/internal/struct"
 	"fmt"
 	"net/http"
 	"sort"
@@ -23,7 +23,23 @@ func NewHandler(store *service.ReportStore, objectStore *service.ObjectStore) *H
 	return &Handler{store: store, objectStore: objectStore}
 }
 
+func parseReportType(value string) (models.ReportType, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "regular", "avito":
+		return models.ReportTypeRegular, true
+	case "hr":
+		return models.ReportTypeHR, true
+	default:
+		return "", false
+	}
+}
+
 func (h *Handler) UploadReport(c *gin.Context) {
+	reportType, ok := parseReportType(c.PostForm("type"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "неизвестный тип отчёта"})
+		return
+	}
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "файл не найден в запросе: " + err.Error()})
@@ -46,20 +62,22 @@ func (h *Handler) UploadReport(c *gin.Context) {
 
 	id := uuid.New().String()
 	h.store.Add(id, &service.StoredReport{
-		ID:        id,
-		FileName:  header.Filename,
-		UserID:    userID,
-		CabinetID: cabinetID,
-		Offers:    offers,
-		File:      excelFile,
+		ID:         id,
+		FileName:   header.Filename,
+		ReportType: reportType,
+		UserID:     userID,
+		CabinetID:  cabinetID,
+		Offers:     offers,
+		File:       excelFile,
 	})
 
 	c.JSON(http.StatusOK, models.UploadResponse{
-		ID:       id,
-		FileName: header.Filename,
-		Rows:     len(offers),
-		Warnings: warnings,
-		Columns:  foundColumns,
+		ID:         id,
+		FileName:   header.Filename,
+		ReportType: reportType,
+		Rows:       len(offers),
+		Warnings:   warnings,
+		Columns:    foundColumns,
 	})
 }
 
@@ -68,7 +86,7 @@ func (h *Handler) ListReports(c *gin.Context) {
 	reports := h.store.ListByUser(claims.UserID)
 	result := make([]models.ReportInfo, len(reports))
 	for i, r := range reports {
-		result[i] = models.ReportInfo{ID: r.ID, FileName: r.FileName}
+		result[i] = models.ReportInfo{ID: r.ID, FileName: r.FileName, ReportType: r.ReportType}
 	}
 	c.JSON(http.StatusOK, result)
 }
@@ -92,10 +110,11 @@ func (h *Handler) GetStats(c *gin.Context) {
 	summary := service.GetSummary(report.Offers)
 
 	c.JSON(http.StatusOK, models.StatsResponse{
-		ReportID: report.ID,
-		FileName: report.FileName,
-		Stats:    resultStats,
-		Summary:  summary,
+		ReportID:   report.ID,
+		FileName:   report.FileName,
+		ReportType: report.ReportType,
+		Stats:      resultStats,
+		Summary:    summary,
 	})
 }
 
@@ -166,7 +185,7 @@ func (h *Handler) MultiStats(c *gin.Context) {
 		}
 		summary := service.GetSummary(report.Offers)
 		result = append(result, models.StatsResponse{
-			ReportID: report.ID, FileName: report.FileName,
+			ReportID: report.ID, FileName: report.FileName, ReportType: report.ReportType,
 			Stats: resultStats, Summary: summary,
 		})
 	}
