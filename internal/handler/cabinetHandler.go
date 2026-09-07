@@ -3,6 +3,7 @@ package handler
 import (
 	"avito-easy-report/internal/middleware"
 	"avito-easy-report/internal/service"
+	models "avito-easy-report/internal/struct"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -66,13 +67,9 @@ func (h *CabinetHandler) ListReports(c *gin.Context) {
 	}
 	// Возвращаем отчёты кабинета
 	reports := h.reports.ListByCabinet(claims.UserID, cabID)
-	type info struct {
-		ID       string `json:"id"`
-		FileName string `json:"fileName"`
-	}
-	result := make([]info, len(reports))
+	result := make([]models.ReportInfo, len(reports))
 	for i, r := range reports {
-		result[i] = info{ID: r.ID, FileName: r.FileName}
+		result[i] = models.ReportInfo{ID: r.ID, FileName: r.FileName, ReportType: r.ReportType}
 	}
 	c.JSON(http.StatusOK, result)
 }

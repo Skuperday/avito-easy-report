@@ -20,12 +20,13 @@ type ReportStore struct {
 
 // StoredReport — загруженный отчёт со всеми данными
 type StoredReport struct {
-	ID        string
-	FileName  string
-	UserID    uint
-	CabinetID string
-	Offers    []models.Offer
-	File      *excelize.File
+	ID         string
+	FileName   string
+	ReportType models.ReportType
+	UserID     uint
+	CabinetID  string
+	Offers     []models.Offer
+	File       *excelize.File
 }
 
 // NewReportStore создаёт хранилище

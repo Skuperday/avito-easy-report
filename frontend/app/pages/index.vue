@@ -4,7 +4,7 @@
     <div class="flex items-center gap-3 mb-4">
       <span class="text-sm muted">Тип отчёта:</span>
       <select v-model="reportType" class="theme-select">
-        <option value="avito">🏷 Avito (объявления)</option>
+        <option value="regular">📊 Обычный</option>
         <option value="hr">💼 HR (вакансии)</option>
       </select>
     </div>
@@ -39,7 +39,13 @@
           @click="toggleExpand(r.id)"
         >
           <input type="checkbox" :checked="checked.has(r.id)" @change="toggleCheck(r.id)" @click.stop class="w-4 h-4 accent-indigo-500 shrink-0" />
-          <div class="flex-1 min-w-0"><div class="font-bold truncate">{{ r.fileName }}</div><div class="muted text-xs">{{ r.id.slice(0, 8) }}...</div></div>
+          <div class="flex-1 min-w-0">
+            <div class="font-bold truncate">{{ r.fileName }}</div>
+            <div class="muted text-xs flex items-center gap-2">
+              <span>{{ r.id.slice(0, 8) }}...</span>
+              <span class="badge">{{ reportTypeLabel(r.reportType) }}</span>
+            </div>
+          </div>
           <button @click.stop="deleteSingle(r.id)" class="text-xs font-medium hover:underline shrink-0" style="color: var(--destructive)">Удалить</button>
         </div>
         <!-- Развёрнутая статистика -->
@@ -93,10 +99,11 @@ const config = useRuntimeConfig()
 
 const fileInput = ref<HTMLInputElement>()
 const isDragging = ref(false)
-const reports = ref<{ id: string; fileName: string }[]>([])
+type ReportType = 'regular' | 'hr'
+const reports = ref<{ id: string; fileName: string; reportType: ReportType }[]>([])
 const checked = ref(new Set<string>())
 const toasts = ref<{ type: string; text: string }[]>([])
-const reportType = ref('avito')
+const reportType = ref<ReportType>('regular')
 const expandedId = ref<string | null>(null)
 const expandedStats = ref<any>(null)
 const expandedLoading = ref(false)
@@ -104,6 +111,7 @@ const expandedLoading = ref(false)
 const notify = (type: string, text: string) => {
   toasts.value.push({ type, text })
 }
+const reportTypeLabel = (type: ReportType) => type === 'hr' ? 'HR' : 'Обычный'
 
 const toggleExpand = async (id: string) => {
   if (expandedId.value === id) {
@@ -127,6 +135,7 @@ const toggleExpand = async (id: string) => {
 const uploadFile = async (file: File) => {
   const formData = new FormData()
   formData.append('file', file)
+  formData.append('type', reportType.value)
   notify('', `Загружаем ${file.name}...`)
   try {
     const res = await auth.apiFetch('/upload', { method: 'POST', body: formData, headers: {} })

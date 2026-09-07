@@ -1,5 +1,12 @@
 package models
 
+type ReportType string
+
+const (
+	ReportTypeRegular ReportType = "regular"
+	ReportTypeHR      ReportType = "hr"
+)
+
 // Offer — сырое объявление из отчёта Avito
 type Offer struct {
 	City            string  `json:"city"`
@@ -92,23 +99,26 @@ type CompareResponse struct {
 // --- API-структуры ---
 
 type UploadResponse struct {
-	ID       string   `json:"id"`
-	FileName string   `json:"fileName"`
-	Rows     int      `json:"rows"`
-	Warnings []string `json:"warnings,omitempty"`
-	Columns  []string `json:"columns,omitempty"`
+	ID         string     `json:"id"`
+	FileName   string     `json:"fileName"`
+	ReportType ReportType `json:"reportType"`
+	Rows       int        `json:"rows"`
+	Warnings   []string   `json:"warnings,omitempty"`
+	Columns    []string   `json:"columns,omitempty"`
 }
 
 type ReportInfo struct {
-	ID       string `json:"id"`
-	FileName string `json:"fileName"`
+	ID         string     `json:"id"`
+	FileName   string     `json:"fileName"`
+	ReportType ReportType `json:"reportType"`
 }
 
 type StatsResponse struct {
-	ReportID string        `json:"reportId"`
-	FileName string        `json:"fileName"`
-	Stats    []ResultStats `json:"stats"`
-	Summary  StatsSummary  `json:"summary"`
+	ReportID   string        `json:"reportId"`
+	FileName   string        `json:"fileName"`
+	ReportType ReportType    `json:"reportType"`
+	Stats      []ResultStats `json:"stats"`
+	Summary    StatsSummary  `json:"summary"`
 }
 
 type MultiStatsResponse struct {

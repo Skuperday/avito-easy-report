@@ -1,6 +1,9 @@
+export type ReportType = 'regular' | 'hr'
+
 export interface Report {
   id: string
   fileName: string
+  reportType: ReportType
 }
 
 export interface ResultStats {
@@ -29,6 +32,7 @@ export interface ResultStats {
 export interface StatsResponse {
   reportId: string
   fileName: string
+  reportType: ReportType
   stats: ResultStats[]
 }
 
@@ -39,6 +43,7 @@ export interface MultiStatsResponse {
 export interface UploadResponse {
   id: string
   fileName: string
+  reportType: ReportType
   rows: number
   warnings?: string[]
 }
