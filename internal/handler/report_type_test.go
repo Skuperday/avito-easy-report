@@ -34,6 +34,32 @@ func TestParseReportTypeCanonicalValues(t *testing.T) {
 	}
 }
 
+func TestReportTypeGroupingMatrix(t *testing.T) {
+	regularGroups := map[string]bool{
+		"city": true, "category": true, "name": true, "offers": true,
+		"employee": false, "object": false, "employee-object": false,
+	}
+	for group, want := range regularGroups {
+		if got := isGroupAllowed(models.ReportTypeRegular, group); got != want {
+			t.Errorf("regular group %q: получено %v, ожидалось %v", group, got, want)
+		}
+	}
+	for _, group := range []string{"city", "category", "name", "offers", "employee", "object", "employee-object"} {
+		if !isGroupAllowed(models.ReportTypeHR, group) {
+			t.Errorf("HR group %q должен быть доступен", group)
+		}
+	}
+	if isGroupAllowed(models.ReportTypeHR, "unknown") {
+		t.Fatal("неизвестная группировка не должна быть доступна")
+	}
+	if !isCompareGroupAllowed(models.ReportTypeHR, "employee") || !isCompareGroupAllowed(models.ReportTypeHR, "object") {
+		t.Fatal("HR compare должен поддерживать сотрудников и объекты")
+	}
+	if isCompareGroupAllowed(models.ReportTypeHR, "employee-object") {
+		t.Fatal("вложенная группировка объектов сотрудников не должна быть доступна в compare")
+	}
+}
+
 func TestUploadReportRejectsUnknownType(t *testing.T) {
 	store := service.NewReportStore()
 	handler := NewHandler(store, service.NewObjectStore())
@@ -78,6 +104,41 @@ func TestMultiStatsReturnsReportType(t *testing.T) {
 	}
 }
 
+func TestMultiStatsEnforcesReportTypeForEmployeeObject(t *testing.T) {
+	store := service.NewReportStore()
+	store.Add("hr-report", &service.StoredReport{
+		ID: "hr-report", FileName: "hr.xlsx", ReportType: models.ReportTypeHR, UserID: 42,
+		Offers: []models.Offer{{Employee: "Анна", Object: "Склад"}},
+	})
+	store.Add("regular-report", &service.StoredReport{
+		ID: "regular-report", FileName: "regular.xlsx", ReportType: models.ReportTypeRegular, UserID: 42,
+		Offers: []models.Offer{{Employee: "Борис", Object: "Офис"}},
+	})
+	handler := NewHandler(store, service.NewObjectStore())
+
+	hrResponse := httptest.NewRecorder()
+	hrContext, _ := gin.CreateTestContext(hrResponse)
+	hrContext.Request = httptest.NewRequest(http.MethodGet, "/reports/multi?ids=hr-report&groupBy=employee-object", nil)
+	hrContext.Set("claims", &service.Claims{UserID: 42})
+	handler.MultiStats(hrContext)
+	var hrBody models.MultiStatsResponse
+	if err := json.Unmarshal(hrResponse.Body.Bytes(), &hrBody); err != nil {
+		t.Fatalf("decode HR multi stats: %v", err)
+	}
+	if hrResponse.Code != http.StatusOK || len(hrBody.Reports) != 1 || len(hrBody.Reports[0].Stats) != 1 || hrBody.Reports[0].Stats[0].Employee != "Анна" {
+		t.Fatalf("HR multi employee-object неверен: code=%d body=%s", hrResponse.Code, hrResponse.Body.String())
+	}
+
+	mixedResponse := httptest.NewRecorder()
+	mixedContext, _ := gin.CreateTestContext(mixedResponse)
+	mixedContext.Request = httptest.NewRequest(http.MethodGet, "/reports/multi?ids=hr-report,regular-report&groupBy=employee-object", nil)
+	mixedContext.Set("claims", &service.Claims{UserID: 42})
+	handler.MultiStats(mixedContext)
+	if mixedResponse.Code != http.StatusBadRequest {
+		t.Fatalf("HR-группировка mixed-выборки должна вернуть 400, получено %d: %s", mixedResponse.Code, mixedResponse.Body.String())
+	}
+}
+
 func TestStatsResponseReturnsReportType(t *testing.T) {
 	store := service.NewReportStore()
 	store.Add("hr-report", &service.StoredReport{
@@ -100,6 +161,118 @@ func TestStatsResponseReturnsReportType(t *testing.T) {
 	}
 	if body["reportType"] != "hr" {
 		t.Fatalf("stats должны вернуть HR-тип: %#v", body)
+	}
+}
+
+func TestRegularReportRejectsHRGrouping(t *testing.T) {
+	store := service.NewReportStore()
+	store.Add("regular-report", &service.StoredReport{
+		ID:         "regular-report",
+		FileName:   "regular.xlsx",
+		ReportType: models.ReportTypeRegular,
+		UserID:     42,
+		Offers:     []models.Offer{{Employee: "Анна", Object: "Склад"}},
+	})
+	handler := NewHandler(store, service.NewObjectStore())
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Params = gin.Params{{Key: "id", Value: "regular-report"}}
+	context.Request = httptest.NewRequest(http.MethodGet, "/reports/regular-report/stats?groupBy=employee", nil)
+	context.Set("claims", &service.Claims{UserID: 42})
+
+	handler.GetStats(context)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("HR-группировка обычного отчёта должна вернуть 400, получено %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestHRReportReturnsEmployeeObjectGrouping(t *testing.T) {
+	store := service.NewReportStore()
+	store.Add("hr-report", &service.StoredReport{
+		ID:         "hr-report",
+		FileName:   "hr.xlsx",
+		ReportType: models.ReportTypeHR,
+		UserID:     42,
+		Offers: []models.Offer{{
+			Employee: "Анна", Object: "Склад", Views: 20, Response: 2,
+		}},
+	})
+	handler := NewHandler(store, service.NewObjectStore())
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Params = gin.Params{{Key: "id", Value: "hr-report"}}
+	context.Request = httptest.NewRequest(http.MethodGet, "/reports/hr-report/stats?groupBy=employee-object", nil)
+	context.Set("claims", &service.Claims{UserID: 42})
+
+	handler.GetStats(context)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("HR employee-object должен вернуть 200, получено %d: %s", response.Code, response.Body.String())
+	}
+	var body models.StatsResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode stats: %v", err)
+	}
+	if len(body.Stats) != 1 || body.Stats[0].Employee != "Анна" || body.Stats[0].Object != "Склад" {
+		t.Fatalf("неверная employee-object статистика: %#v", body.Stats)
+	}
+}
+
+func TestCompareReportsRejectsHRGroupingForRegularReports(t *testing.T) {
+	store := service.NewReportStore()
+	for _, report := range []service.StoredReport{
+		{ID: "regular-early", FileName: "report-2026-01-01.xlsx", ReportType: models.ReportTypeRegular, UserID: 42},
+		{ID: "regular-late", FileName: "report-2026-02-01.xlsx", ReportType: models.ReportTypeRegular, UserID: 42},
+	} {
+		report := report
+		store.Add(report.ID, &report)
+	}
+	handler := NewHandler(store, service.NewObjectStore())
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Request = httptest.NewRequest(http.MethodGet, "/reports/compare?ids=regular-early,regular-late&groupBy=employee", nil)
+	context.Set("claims", &service.Claims{UserID: 42})
+
+	handler.CompareReports(context)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("сравнение regular по сотрудникам должно вернуть 400, получено %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestCompareReportsReturnsTypesForHRGrouping(t *testing.T) {
+	store := service.NewReportStore()
+	for _, report := range []service.StoredReport{
+		{
+			ID: "hr-early", FileName: "report-2026-01-01.xlsx", ReportType: models.ReportTypeHR, UserID: 42,
+			Offers: []models.Offer{{Employee: "Анна", Views: 10}},
+		},
+		{
+			ID: "hr-late", FileName: "report-2026-02-01.xlsx", ReportType: models.ReportTypeHR, UserID: 42,
+			Offers: []models.Offer{{Employee: "Анна", Views: 20}},
+		},
+	} {
+		report := report
+		store.Add(report.ID, &report)
+	}
+	handler := NewHandler(store, service.NewObjectStore())
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Request = httptest.NewRequest(http.MethodGet, "/reports/compare?ids=hr-early,hr-late&groupBy=employee", nil)
+	context.Set("claims", &service.Claims{UserID: 42})
+
+	handler.CompareReports(context)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("HR compare по сотрудникам должен вернуть 200, получено %d: %s", response.Code, response.Body.String())
+	}
+	var body models.CompareResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode compare: %v", err)
+	}
+	if len(body.ReportTypes) != 2 || body.ReportTypes[0] != models.ReportTypeHR || body.ReportTypes[1] != models.ReportTypeHR {
+		t.Fatalf("compare должен вернуть типы выбранных отчётов: %#v", body.ReportTypes)
 	}
 }
 

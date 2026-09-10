@@ -44,26 +44,30 @@ type Stats struct {
 
 // ResultStats — строка результата с группировкой
 type ResultStats struct {
-	Number         int     `json:"number,omitempty"`
-	Key            string  `json:"key"`
-	City           string  `json:"city,omitempty"`
-	Views           int     `json:"views"`
-	Shows           int     `json:"shows"`
-	Favorite        int     `json:"favorite"`
-	Contacts        int     `json:"contacts"`
-	Promotion       float64 `json:"promotion"`
-	ViewersCost     float64 `json:"viewersCost"`
-	TargetViewers   int     `json:"targetViewers"`
-	ViewWithMessage int     `json:"viewWithMessage"`
-	LookPhone       int     `json:"lookPhone"`
-	PPConversion    float64 `json:"ppConversion"`
-	PKConversion    float64 `json:"pkConversion"`
-	AvgViewPrice    float64 `json:"avgViewPrice"`
-	AvgContactPrice float64 `json:"avgContactPrice"`
-	Expense         float64 `json:"expense"`
-	Response        int     `json:"response"`
-	AvgResponsePrice    float64 `json:"avgResponsePrice"`
-	ResponseConversion  float64 `json:"responseConversion"`
+	Number             int     `json:"number,omitempty"`
+	Key                string  `json:"key"`
+	City               string  `json:"city,omitempty"`
+	Employee           string  `json:"employee,omitempty"`
+	Object             string  `json:"object,omitempty"`
+	EmployeeMissing    bool    `json:"employeeMissing,omitempty"`
+	ObjectMissing      bool    `json:"objectMissing,omitempty"`
+	Views              int     `json:"views"`
+	Shows              int     `json:"shows"`
+	Favorite           int     `json:"favorite"`
+	Contacts           int     `json:"contacts"`
+	Promotion          float64 `json:"promotion"`
+	ViewersCost        float64 `json:"viewersCost"`
+	TargetViewers      int     `json:"targetViewers"`
+	ViewWithMessage    int     `json:"viewWithMessage"`
+	LookPhone          int     `json:"lookPhone"`
+	PPConversion       float64 `json:"ppConversion"`
+	PKConversion       float64 `json:"pkConversion"`
+	AvgViewPrice       float64 `json:"avgViewPrice"`
+	AvgContactPrice    float64 `json:"avgContactPrice"`
+	Expense            float64 `json:"expense"`
+	Response           int     `json:"response"`
+	AvgResponsePrice   float64 `json:"avgResponsePrice"`
+	ResponseConversion float64 `json:"responseConversion"`
 }
 
 // TopItem — элемент топ-N
@@ -91,9 +95,10 @@ type PeriodStats struct {
 
 // CompareResponse — сравнение двух периодов
 type CompareResponse struct {
-	Early  PeriodStats   `json:"early"`
-	Late   PeriodStats   `json:"late"`
-	Delta  []ResultStats `json:"delta"`
+	Early       PeriodStats   `json:"early"`
+	Late        PeriodStats   `json:"late"`
+	Delta       []ResultStats `json:"delta"`
+	ReportTypes []ReportType  `json:"reportTypes"`
 }
 
 // --- API-структуры ---
