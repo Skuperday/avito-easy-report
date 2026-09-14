@@ -4,13 +4,14 @@
     <div v-else-if="error" class="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{{ error }}</div>
 
     <!-- Переключатель группировки -->
-    <div v-if="!loading && !error" class="flex gap-2 mb-4">
+    <div v-if="!loading && !error" class="flex flex-wrap gap-2 mb-4">
       <button class="btn text-sm" :class="groupBy === 'city' ? '' : 'secondary'" @click="groupBy = 'city'; reload()">По городам</button>
       <button class="btn text-sm" :class="groupBy === 'category' ? '' : 'secondary'" @click="groupBy = 'category'; reload()">По категориям</button>
       <button class="btn text-sm" :class="groupBy === 'name' ? '' : 'secondary'" @click="groupBy = 'name'; reload()">По подкатегориям</button>
       <button class="btn text-sm" :class="groupBy === 'offers' ? '' : 'secondary'" @click="groupBy = 'offers'; reload()">По объявлениям</button>
-      <button class="btn text-sm" :class="groupBy === 'employee' ? '' : 'secondary'" @click="groupBy = 'employee'; reload()">По сотрудникам</button>
-      <button class="btn text-sm" :class="groupBy === 'object' ? '' : 'secondary'" @click="groupBy = 'object'; reload()">По объектам</button>
+      <button v-if="hrGroupsAvailable" class="btn text-sm" :class="groupBy === 'employee' ? '' : 'secondary'" @click="groupBy = 'employee'; reload()">По сотрудникам</button>
+      <button v-if="hrGroupsAvailable" class="btn text-sm" :class="groupBy === 'object' ? '' : 'secondary'" @click="groupBy = 'object'; reload()">По объектам</button>
+      <button v-if="employeeObjectAvailable" class="btn text-sm" :class="groupBy === 'employee-object' ? '' : 'secondary'" @click="groupBy = 'employee-object'; reload()">Объекты сотрудников</button>
     </div>
 
     <!-- Сравнение периодов -->
@@ -115,7 +116,47 @@
           Топ городов: <span v-for="(t, i) in r.summary.topCities" :key="t.name">{{ t.name }}: {{ t.value }}<span v-if="i < r.summary.topCities.length-1">, </span></span>
         </p>
 
-        <div class="table-wrap">
+        <div v-if="groupBy === 'employee-object'" class="space-y-5">
+          <section v-for="group in employeeGroups(r.stats)" :key="group.id">
+            <h3 class="text-sm font-bold mb-2">Сотрудник: {{ group.employee }}</h3>
+            <div class="table-wrap">
+              <table class="data-table compact">
+                <thead><tr>
+                  <th>Объект</th>
+                  <th class="text-right">Показы</th>
+                  <th class="text-right">ПП%</th>
+                  <th class="text-right">Просмотры</th>
+                  <th class="text-right">ПК%</th>
+                  <th class="text-right">Контакты</th>
+                  <th class="text-right">Расход</th>
+                  <th class="text-right">Ср. цена контакта</th>
+                  <th class="text-right">Отклики</th>
+                  <th class="text-right">Конв. в отклик</th>
+                  <th class="text-right">Ср. цена отклика</th>
+                  <th class="text-right">Избранное</th>
+                </tr></thead>
+                <tbody>
+                  <tr v-for="s in sorted(group.rows)" :key="`${s.employeeMissing}:${s.employee}:${s.objectMissing}:${s.object}`">
+                    <td class="font-bold">{{ s.object }}</td>
+                    <td class="text-right">{{ fmt(s.shows) }}</td>
+                    <td class="text-right">{{ fmt(s.ppConversion, 1) }}%</td>
+                    <td class="text-right">{{ fmt(s.views) }}</td>
+                    <td class="text-right">{{ fmt(s.pkConversion, 1) }}%</td>
+                    <td class="text-right">{{ fmt(s.contacts) }}</td>
+                    <td class="text-right">{{ fmt(s.expense, 2) }} ₽</td>
+                    <td class="text-right">{{ fmt(s.avgContactPrice, 2) }} ₽</td>
+                    <td class="text-right">{{ fmt(s.response) }}</td>
+                    <td class="text-right">{{ fmt(s.responseConversion, 1) }}%</td>
+                    <td class="text-right">{{ fmt(s.avgResponsePrice, 2) }} ₽</td>
+                    <td class="text-right">{{ fmt(s.favorite) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <div v-else class="table-wrap">
           <table class="data-table compact">
             <thead><tr>
               <th class="cursor-pointer select-none" @click="toggleSort(groupBy === 'offers' ? 'number' : 'key')">{{ groupLabel }} <span class="muted">{{ sortIcon(groupBy === 'offers' ? 'number' : 'key') }}</span></th>
@@ -176,7 +217,28 @@ const isCompare = ref(false)
 
 const sortKey = ref('contacts')
 const sortDir = ref<'asc' | 'desc'>('desc')
-const groupLabel = computed(() => groupBy.value === 'city' ? 'Город' : groupBy.value === 'category' ? 'Категория' : groupBy.value === 'offers' ? '№' : groupBy.value === 'employee' ? 'Сотрудник' : groupBy.value === 'object' ? 'Объект' : 'Подкатегория')
+const groupLabel = computed(() => groupBy.value === 'city' ? 'Город' : groupBy.value === 'category' ? 'Категория' : groupBy.value === 'offers' ? '№' : groupBy.value === 'employee' ? 'Сотрудник' : groupBy.value === 'object' || groupBy.value === 'employee-object' ? 'Объект' : 'Подкатегория')
+const hrGroupsAvailable = computed(() => {
+  if (isCompare.value) {
+    const types = compareData.value?.reportTypes || []
+    return types.length > 0 && types.every((type: string) => type === 'hr')
+  }
+  return data.value.reports.length > 0 && data.value.reports.every(report => report.reportType === 'hr')
+})
+const employeeObjectAvailable = computed(() => hrGroupsAvailable.value && !isCompare.value)
+
+function employeeGroups(stats: any[]) {
+  const groups = new Map<string, { employee: string, rows: any[] }>()
+  for (const row of stats || []) {
+    const employee = row.employee || 'Сотрудник не указан'
+    const id = `${row.employeeMissing ? 'missing' : 'value'}:${employee}`
+    if (!groups.has(id)) groups.set(id, { employee, rows: [] })
+    groups.get(id)!.rows.push(row)
+  }
+  return [...groups.entries()]
+    .map(([id, group]) => ({ id, ...group }))
+    .sort((a, b) => a.employee.localeCompare(b.employee, 'ru'))
+}
 
 function toggleSort(key: string) { if (sortKey.value === key) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'; else { sortKey.value = key; sortDir.value = 'desc' } }
 function sortIcon(key: string) { if (sortKey.value !== key) return ''; return sortDir.value === 'asc' ? '↑' : '↓' }
@@ -192,6 +254,7 @@ async function reload() {
   const ids = route.query.ids as string
   if (!ids) return
   loading.value = true
+  error.value = ''
   try {
     if (isCompare.value) {
       const res = await auth.apiFetch(`/reports/compare?ids=${ids}&groupBy=${groupBy.value}`)

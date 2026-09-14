@@ -100,13 +100,11 @@ func (h *Handler) GetStats(c *gin.Context) {
 	}
 
 	groupBy := c.DefaultQuery("groupBy", "city")
-	var resultStats []models.ResultStats
-	if groupBy == "offers" {
-		resultStats = service.GetTopListings(report.Offers, 10)
-	} else {
-		statsMap := service.GetGroupedStats(report.Offers, groupBy)
-		resultStats = service.GetResultStats(statsMap)
+	if !isGroupAllowed(report.ReportType, groupBy) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "группировка недоступна для выбранного типа отчёта"})
+		return
 	}
+	resultStats := service.GetStatsForGroup(report.Offers, groupBy)
 	summary := service.GetSummary(report.Offers)
 
 	c.JSON(http.StatusOK, models.StatsResponse{
@@ -176,13 +174,11 @@ func (h *Handler) MultiStats(c *gin.Context) {
 		if report == nil || !h.ownsReport(c, report) {
 			continue
 		}
-		var resultStats []models.ResultStats
-		if groupBy == "offers" {
-			resultStats = service.GetTopListings(report.Offers, 10)
-		} else {
-			statsMap := service.GetGroupedStats(report.Offers, groupBy)
-			resultStats = service.GetResultStats(statsMap)
+		if !isGroupAllowed(report.ReportType, groupBy) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "группировка недоступна для выбранного типа отчёта"})
+			return
 		}
+		resultStats := service.GetStatsForGroup(report.Offers, groupBy)
 		summary := service.GetSummary(report.Offers)
 		result = append(result, models.StatsResponse{
 			ReportID: report.ID, FileName: report.FileName, ReportType: report.ReportType,
@@ -214,9 +210,10 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	}
 
 	type indexedReport struct {
-		id      string
-		offers  []models.Offer
-		created time.Time
+		id         string
+		offers     []models.Offer
+		reportType models.ReportType
+		created    time.Time
 	}
 	var reports []indexedReport
 	for _, id := range ids {
@@ -225,8 +222,12 @@ func (h *Handler) CompareReports(c *gin.Context) {
 		if r == nil || !h.ownsReport(c, r) {
 			continue
 		}
+		if !isCompareGroupAllowed(r.ReportType, groupBy) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "группировка недоступна для выбранного типа отчёта"})
+			return
+		}
 		t := parseDateFromFilename(r.FileName)
-		reports = append(reports, indexedReport{id: r.ID, offers: r.Offers, created: t})
+		reports = append(reports, indexedReport{id: r.ID, offers: r.Offers, reportType: r.ReportType, created: t})
 	}
 
 	if len(reports) < 2 {
@@ -240,6 +241,10 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	late := reports[len(reports)-1].offers
 
 	result := service.ComparePeriods(early, late, compareGroupBy)
+	result.ReportTypes = make([]models.ReportType, len(reports))
+	for i, report := range reports {
+		result.ReportTypes[i] = report.reportType
+	}
 	c.JSON(http.StatusOK, result)
 }
 
@@ -249,6 +254,21 @@ func (h *Handler) ownsReport(c *gin.Context, report *service.StoredReport) bool 
 		return false
 	}
 	return report.UserID == claims.UserID
+}
+
+func isGroupAllowed(reportType models.ReportType, groupBy string) bool {
+	switch groupBy {
+	case "city", "category", "name", "offers":
+		return true
+	case "employee", "object", "employee-object":
+		return reportType == models.ReportTypeHR
+	default:
+		return false
+	}
+}
+
+func isCompareGroupAllowed(reportType models.ReportType, groupBy string) bool {
+	return groupBy != "employee-object" && isGroupAllowed(reportType, groupBy)
 }
 
 func parseDateFromFilename(name string) time.Time {
