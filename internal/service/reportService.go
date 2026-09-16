@@ -20,12 +20,13 @@ type ReportStore struct {
 
 // StoredReport — загруженный отчёт со всеми данными
 type StoredReport struct {
-	ID        string
-	FileName  string
-	UserID    uint
-	CabinetID string
-	Offers    []models.Offer
-	File      *excelize.File
+	ReportType string
+	ID         string
+	FileName   string
+	UserID     uint
+	CabinetID  string
+	Offers     []models.Offer
+	File       *excelize.File
 }
 
 // NewReportStore создаёт хранилище
@@ -168,6 +169,7 @@ func GetGroupedStats(offers []models.Offer, groupBy string) map[string]models.St
 			continue
 		}
 		stats := result[key]
+		stats.ListingCount++
 		stats.Contacts += offer.Contacts
 		stats.Favorite += offer.Favorite
 		stats.Promotion += offer.Promotion
@@ -204,25 +206,25 @@ func GetTopListings(offers []models.Offer, limit int) []models.ResultStats {
 	for _, o := range offers {
 		expense := o.Promotion + o.ViewersCost
 		result = append(result, models.ResultStats{
-			Key:             o.ListingNumber,
-			City:            o.City,
-			Shows:           o.Shows,
-			Views:           o.Views,
-			Contacts:        o.Contacts,
-			Favorite:        o.Favorite,
-			Promotion:       o.Promotion,
-			ViewersCost:     o.ViewersCost,
-			Expense:         expense,
-			PPConversion:    canDivByZero(float64(o.Views), float64(o.Shows)) * 100,
-			PKConversion:    canDivByZero(float64(o.Contacts), float64(o.Views)) * 100,
-			AvgContactPrice: canDivByZero(expense, float64(o.Contacts)),
-			AvgViewPrice:    canDivByZero(expense, float64(o.Views)),
-			TargetViewers:   o.TargetViewers,
-			ViewWithMessage: o.ViewWithMessage,
-			LookPhone:       o.LookPhone,
-			Response:        o.Response,
-			AvgResponsePrice:    canDivByZero(expense, float64(o.Response)),
-			ResponseConversion:  canDivByZero(float64(o.Views), float64(o.Response)) * 100,
+			Key:                o.ListingNumber,
+			City:               o.City,
+			Shows:              o.Shows,
+			Views:              o.Views,
+			Contacts:           o.Contacts,
+			Favorite:           o.Favorite,
+			Promotion:          o.Promotion,
+			ViewersCost:        o.ViewersCost,
+			Expense:            expense,
+			PPConversion:       canDivByZero(float64(o.Views), float64(o.Shows)) * 100,
+			PKConversion:       canDivByZero(float64(o.Contacts), float64(o.Views)) * 100,
+			AvgContactPrice:    canDivByZero(expense, float64(o.Contacts)),
+			AvgViewPrice:       canDivByZero(expense, float64(o.Views)),
+			TargetViewers:      o.TargetViewers,
+			ViewWithMessage:    o.ViewWithMessage,
+			LookPhone:          o.LookPhone,
+			Response:           o.Response,
+			AvgResponsePrice:   canDivByZero(expense, float64(o.Response)),
+			ResponseConversion: canDivByZero(float64(o.Views), float64(o.Response)) * 100,
 		})
 	}
 
@@ -256,24 +258,25 @@ func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 	result := make([]models.ResultStats, 0, len(stats))
 	for key, stat := range stats {
 		resultStat := models.ResultStats{
-			Key:             key,
-			Views:           stat.Views,
-			Favorite:        stat.Favorite,
-			Shows:           stat.Shows,
-			Contacts:        stat.Contacts,
-			Promotion:       stat.Promotion,
-			ViewersCost:     stat.ViewersCost,
-			PPConversion:    canDivByZero(float64(stat.Views), float64(stat.Shows)) * 100,
-			PKConversion:    canDivByZero(float64(stat.Contacts), float64(stat.Views)) * 100,
-			AvgViewPrice:    canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Views)),
-			AvgContactPrice: canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Contacts)),
-			Expense:         stat.Promotion + stat.ViewersCost,
-			TargetViewers:   stat.TargetViewers,
-			ViewWithMessage: stat.ViewWithMessage,
-			LookPhone:       stat.LookPhone,
-			Response:        stat.Response,
-			AvgResponsePrice:    canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Response)),
-			ResponseConversion:  canDivByZero(float64(stat.Views), float64(stat.Response)) * 100,
+			Key:                key,
+			ListingCount:       stat.ListingCount,
+			Views:              stat.Views,
+			Favorite:           stat.Favorite,
+			Shows:              stat.Shows,
+			Contacts:           stat.Contacts,
+			Promotion:          stat.Promotion,
+			ViewersCost:        stat.ViewersCost,
+			PPConversion:       canDivByZero(float64(stat.Views), float64(stat.Shows)) * 100,
+			PKConversion:       canDivByZero(float64(stat.Contacts), float64(stat.Views)) * 100,
+			AvgViewPrice:       canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Views)),
+			AvgContactPrice:    canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Contacts)),
+			Expense:            stat.Promotion + stat.ViewersCost,
+			TargetViewers:      stat.TargetViewers,
+			ViewWithMessage:    stat.ViewWithMessage,
+			LookPhone:          stat.LookPhone,
+			Response:           stat.Response,
+			AvgResponsePrice:   canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Response)),
+			ResponseConversion: canDivByZero(float64(stat.Views), float64(stat.Response)) * 100,
 		}
 		result = append(result, resultStat)
 	}
@@ -289,6 +292,7 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 	_ = file.SetColWidth(sheet, "A", "M", 15)
 
 	headers := []string{"", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика", "Избранное"}
+	hrHeaders := append([]string{"", "Количество объявлений"}, headers[1:]...)
 	offerHeaders := []string{"Номер объявления", "Город", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика"}
 
 	row := 1
@@ -317,6 +321,7 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 
 	writeSection := func(title string, firstCol string, stats []models.ResultStats, hdrs []string) {
 		// Подставляем название первой колонки
+		hdrs = append([]string(nil), hdrs...)
 		hdrs[0] = firstCol
 		// Заголовок секции — жирный
 		titleCell := cell(1, row)
@@ -331,6 +336,9 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 			offset := 0
 			if hdrs[0] == "Номер объявления" {
 				_ = file.SetCellValue(sheet, cell(2, row), s.City)
+				offset = 1
+			} else if hdrs[1] == "Количество объявлений" {
+				_ = file.SetCellValue(sheet, cell(2, row), s.ListingCount)
 				offset = 1
 			}
 			_ = file.SetCellValue(sheet, cell(2+offset, row), s.Shows)
@@ -364,13 +372,17 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 		writeSection("Топ-10 объявлений по контактам", "Номер объявления", GetTopListings(report.Offers, 10), offerHeaders)
 
 		// HR: сотрудники и объекты (если есть данные)
+		groupHeaders := headers
+		if report.ReportType == "hr" {
+			groupHeaders = hrHeaders
+		}
 		empStats := GetResultStats(GetGroupedStats(report.Offers, "employee"))
 		if len(empStats) > 0 && empStats[0].Key != "" {
-			writeSection("По сотрудникам", "Сотрудник", empStats, headers)
+			writeSection("По сотрудникам", "Сотрудник", empStats, groupHeaders)
 		}
 		objStats := GetResultStats(GetGroupedStats(report.Offers, "object"))
 		if len(objStats) > 0 && objStats[0].Key != "" {
-			writeSection("По объектам", "Объект", objStats, headers)
+			writeSection("По объектам", "Объект", objStats, groupHeaders)
 		}
 	}
 
@@ -589,9 +601,17 @@ func topN(m map[string]int, n int) []models.TopItem {
 }
 
 // ComparePeriods сравнивает два периода и возвращает дельту
-func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareResponse {
+func ComparePeriods(early, late []models.Offer, groupBy string, includeMissingGroups bool) models.CompareResponse {
 	earlyStats := GetGroupedStats(early, groupBy)
 	lateStats := GetGroupedStats(late, groupBy)
+	// HR counts must include groups that disappeared in the later period.
+	if includeMissingGroups {
+		for key := range earlyStats {
+			if _, ok := lateStats[key]; !ok {
+				lateStats[key] = models.Stats{}
+			}
+		}
+	}
 	earlyResult := GetResultStats(earlyStats)
 	lateResult := GetResultStats(lateStats)
 
@@ -607,7 +627,7 @@ func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareRe
 		if !ok {
 			// Новый город/категория — вся статистика как прирост
 			delta = append(delta, models.ResultStats{
-				Key: s.Key, Shows: s.Shows, Views: s.Views, Contacts: s.Contacts,
+				Key: s.Key, ListingCount: s.ListingCount, Shows: s.Shows, Views: s.Views, Contacts: s.Contacts,
 				PPConversion: s.PPConversion, PKConversion: s.PKConversion,
 				AvgViewPrice: s.AvgViewPrice, AvgContactPrice: s.AvgContactPrice,
 				Expense: s.Expense,
@@ -616,6 +636,7 @@ func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareRe
 		}
 		delta = append(delta, models.ResultStats{
 			Key:             s.Key,
+			ListingCount:    s.ListingCount - e.ListingCount,
 			Shows:           s.Shows - e.Shows,
 			Views:           s.Views - e.Views,
 			Contacts:        s.Contacts - e.Contacts,

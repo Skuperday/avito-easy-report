@@ -127,6 +127,7 @@ const toggleExpand = async (id: string) => {
 const uploadFile = async (file: File) => {
   const formData = new FormData()
   formData.append('file', file)
+  formData.append('type', reportType.value)
   notify('', `Загружаем ${file.name}...`)
   try {
     const res = await auth.apiFetch('/upload', { method: 'POST', body: formData, headers: {} })

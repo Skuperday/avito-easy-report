@@ -7,6 +7,7 @@ export interface ResultStats {
   number?: number
   key: string
   city?: string
+  listingCount: number
   shows: number
   views: number
   contacts: number
@@ -27,6 +28,7 @@ export interface ResultStats {
 }
 
 export interface StatsResponse {
+  reportType: 'hr' | 'avito'
   reportId: string
   fileName: string
   stats: ResultStats[]

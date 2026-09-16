@@ -1,9 +1,9 @@
 package handler
 
 import (
-	models "avito-easy-report/internal/struct"
 	"avito-easy-report/internal/middleware"
 	"avito-easy-report/internal/service"
+	models "avito-easy-report/internal/struct"
 	"fmt"
 	"net/http"
 	"sort"
@@ -43,15 +43,20 @@ func (h *Handler) UploadReport(c *gin.Context) {
 		userID = claims.UserID
 	}
 	cabinetID := c.PostForm("cabinetId")
+	reportType := "avito"
+	if c.PostForm("type") == "hr" {
+		reportType = "hr"
+	}
 
 	id := uuid.New().String()
 	h.store.Add(id, &service.StoredReport{
-		ID:        id,
-		FileName:  header.Filename,
-		UserID:    userID,
-		CabinetID: cabinetID,
-		Offers:    offers,
-		File:      excelFile,
+		ID:         id,
+		FileName:   header.Filename,
+		UserID:     userID,
+		CabinetID:  cabinetID,
+		ReportType: reportType,
+		Offers:     offers,
+		File:       excelFile,
 	})
 
 	c.JSON(http.StatusOK, models.UploadResponse{
@@ -92,10 +97,11 @@ func (h *Handler) GetStats(c *gin.Context) {
 	summary := service.GetSummary(report.Offers)
 
 	c.JSON(http.StatusOK, models.StatsResponse{
-		ReportID: report.ID,
-		FileName: report.FileName,
-		Stats:    resultStats,
-		Summary:  summary,
+		ReportType: report.ReportType,
+		ReportID:   report.ID,
+		FileName:   report.FileName,
+		Stats:      resultStats,
+		Summary:    summary,
 	})
 }
 
@@ -166,7 +172,8 @@ func (h *Handler) MultiStats(c *gin.Context) {
 		}
 		summary := service.GetSummary(report.Offers)
 		result = append(result, models.StatsResponse{
-			ReportID: report.ID, FileName: report.FileName,
+			ReportType: report.ReportType,
+			ReportID:   report.ID, FileName: report.FileName,
 			Stats: resultStats, Summary: summary,
 		})
 	}
@@ -195,9 +202,10 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	}
 
 	type indexedReport struct {
-		id      string
-		offers  []models.Offer
-		created time.Time
+		reportType string
+		id         string
+		offers     []models.Offer
+		created    time.Time
 	}
 	var reports []indexedReport
 	for _, id := range ids {
@@ -207,7 +215,7 @@ func (h *Handler) CompareReports(c *gin.Context) {
 			continue
 		}
 		t := parseDateFromFilename(r.FileName)
-		reports = append(reports, indexedReport{id: r.ID, offers: r.Offers, created: t})
+		reports = append(reports, indexedReport{id: r.ID, offers: r.Offers, created: t, reportType: r.ReportType})
 	}
 
 	if len(reports) < 2 {
@@ -220,7 +228,11 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	early := reports[0].offers
 	late := reports[len(reports)-1].offers
 
-	result := service.ComparePeriods(early, late, compareGroupBy)
+	earlyType, lateType := reports[0].reportType, reports[len(reports)-1].reportType
+	includeMissing := earlyType == "hr" && lateType == "hr" && (groupBy == "employee" || groupBy == "object")
+	result := service.ComparePeriods(early, late, compareGroupBy, includeMissing)
+	result.Early.ReportType = earlyType
+	result.Late.ReportType = lateType
 	c.JSON(http.StatusOK, result)
 }
 
