@@ -24,7 +24,7 @@ afterEach(() => { wrapper?.unmount(); vi.unstubAllGlobals() })
 
 describe('upload report type', () => {
   for (const [name, component] of [['home', Upload], ['cabinet', CabinetUpload]] as const) {
-    it.each(['hr', 'avito'])(`${name} submits selected %s type`, async type => {
+    it.each(['hr', 'regular'])(`${name} submits selected %s type`, async type => {
       wrapper = mount(component, { global: { stubs: { NuxtLink: { template: '<a><slot /></a>' } } } })
       await flushPromises()
       await wrapper.find('select').setValue(type)
@@ -34,7 +34,7 @@ describe('upload report type', () => {
       await flushPromises()
       const call = apiFetch.mock.calls.find(([path]) => path === '/upload')
       expect(call).toBeDefined()
-      expect(call![1].body.get('type')).toBe(type)
+      expect(call![1].body.getAll('type')).toEqual([type])
       if (name === 'cabinet') expect(call![1].body.get('cabinetId')).toBe('cabinet')
     })
   }

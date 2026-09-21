@@ -17,7 +17,7 @@ beforeEach(() => {
   vi.stubGlobal('definePageMeta', vi.fn())
   vi.stubGlobal('useRuntimeConfig', () => ({ public: { apiBase: '/api' } }))
   vi.stubGlobal('useRoute', () => ({ query: { ids: 'a,b' } }))
-  apiFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ reports: [report('hr', 'HR'), report('avito', 'Avito'), report('', 'Legacy')] }) })
+  apiFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ reports: [report('hr', 'HR'), report('regular', 'Regular'), report('', 'Legacy')] }) })
   vi.stubGlobal('useAuth', () => ({ apiFetch, token: ref('test') }))
 })
 afterEach(() => { wrapper?.unmount(); vi.unstubAllGlobals() })
@@ -32,11 +32,40 @@ async function group(label: string) {
 }
 
 describe('HR grouped listing count', () => {
+  it('renders employee-object counts left of Shows in every employee section', async () => {
+    apiFetch.mockResolvedValue({ ok: true, json: async () => ({ reports: [{
+      ...report('hr', 'HR'), stats: [
+        { ...row('A', 2), employee: 'Анна', object: 'Офис' },
+        { ...row('B', 12), employee: 'Борис', object: 'Склад' },
+      ],
+    }] }) })
+    await openResults()
+    await group('Объекты сотрудников')
+    expect(wrapper.findAll('section h3').map(h => h.text())).toEqual(['Сотрудник: Анна', 'Сотрудник: Борис'])
+    const tables = wrapper.findAll('table')
+    expect(tables).toHaveLength(2)
+    for (const [i, table] of tables.entries()) {
+      expect(table.findAll('th').slice(0, 3).map(h => h.text())).toEqual(['Объект', countLabel, 'Показы'])
+      const cells = table.findAll('tbody tr')[0]!.findAll('td')
+      expect(cells[1]!.text()).toBe(['2', '12'][i])
+      expect(cells[2]!.text()).toBe('20')
+      expect(cells).toHaveLength(table.findAll('th').length)
+    }
+  })
+  it.each([['hr', 'regular'], ['regular'], [''], []])('hides HR grouping for non-all-HR reports %j', async (...types) => {
+    apiFetch.mockResolvedValue({ ok: true, json: async () => ({ reports: types.map((type, i) => report(type as string, String(i))) }) })
+    await openResults()
+    for (const label of ['По сотрудникам', 'По объектам', 'Объекты сотрудников']) {
+      expect(wrapper.findAll('button').some(b => b.text() === label)).toBe(false)
+    }
+    expect(wrapper.text()).not.toContain(countLabel)
+  })
   it.each(['По сотрудникам', 'По объектам'])('renders comparison counts and aligned P1/P2/Δ for %s', async label => {
     vi.stubGlobal('useRoute', () => ({ query: { ids: 'a,b', compare: '1' } }))
     const early = [row('Анна', 2), row('Ушёл', 1), row('Новый', 0)]
     const late = [row('Анна', 3), row('Ушёл', 0), row('Новый', 2)]
     apiFetch.mockResolvedValue({ ok: true, json: async () => ({
+      reportTypes: ['hr', 'hr'],
       early: { reportType: 'hr', stats: early }, late: { reportType: 'hr', stats: late },
       delta: [row('Анна', 1), row('Ушёл', -1), row('Новый', 2)],
     }) })
@@ -57,20 +86,22 @@ describe('HR grouped listing count', () => {
     expect(wrapper.find('table').text()).not.toContain(countLabel)
     expect(wrapper.findAll('thead tr')[1]!.findAll('th')).toHaveLength(34)
   })
-  it.each([['hr', 'avito'], ['avito', 'hr'], ['avito', 'avito'], ['', '']])('does not add comparison count for %s/%s', async (earlyType, lateType) => {
+  it.each([['hr', 'regular'], ['regular', 'hr'], ['regular', 'regular'], ['', '']])('does not add comparison count for %s/%s', async (earlyType, lateType) => {
     vi.stubGlobal('useRoute', () => ({ query: { ids: 'a,b', compare: '1' } }))
     apiFetch.mockResolvedValue({ ok: true, json: async () => ({
+      reportTypes: [earlyType, lateType],
       early: { reportType: earlyType, stats: [row('Анна', 2)] },
       late: { reportType: lateType, stats: [row('Анна', 3)] }, delta: [row('Анна', 1)],
     }) })
     await openResults()
     for (const label of ['По сотрудникам', 'По объектам']) {
-      await group(label)
+      expect(wrapper.findAll('button').some(b => b.text() === label)).toBe(false)
       expect(wrapper.find('table').text()).not.toContain(countLabel)
       expect(wrapper.findAll('thead tr')[1]!.findAll('th')).toHaveLength(34)
     }
   })
   it.each(['По сотрудникам', 'По объектам'])('renders and sorts only HR %s', async label => {
+    apiFetch.mockResolvedValue({ ok: true, json: async () => ({ reports: [report('hr', 'HR')] }) })
     await openResults()
     await group(label)
     const tables = wrapper.findAll('table')
@@ -78,10 +109,6 @@ describe('HR grouped listing count', () => {
     expect(headers[1]!.text()).toBe(countLabel)
     expect(headers[2]!.text()).toBe('Показы')
     expect(tables[0]!.findAll('tbody tr')[0]!.findAll('td').slice(0, 3).map(c => c.text())).toEqual(['Анна', '2', '20'])
-    for (const table of tables.slice(1)) {
-      expect(table.findAll('th')[1]!.text()).toBe('Показы')
-      expect(table.text()).not.toContain(countLabel)
-    }
     await headers[1]!.trigger('click')
     expect(tables[0]!.findAll('tbody tr').map(r => r.findAll('td')[1]!.text())).toEqual(['12', '2'])
     await headers[1]!.trigger('click')

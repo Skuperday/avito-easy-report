@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: HR grouped advertisement count
-The system SHALL show «Количество объявлений» immediately left of «Показы» for employee and object groups of reports explicitly uploaded as HR.
+The system SHALL show «Количество объявлений» immediately left of «Показы» for employee, object, and employee-object groups of reports explicitly uploaded as HR.
 
 #### Scenario: Multiple advertisements in a group
 - **WHEN** an HR report has two parsed rows for one employee/object, including a zero-activity row

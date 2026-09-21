@@ -1,6 +1,9 @@
+export type ReportType = 'regular' | 'hr'
+
 export interface Report {
   id: string
   fileName: string
+  reportType: ReportType
 }
 
 export interface ResultStats {
@@ -8,6 +11,10 @@ export interface ResultStats {
   key: string
   city?: string
   listingCount: number
+  employee?: string
+  object?: string
+  employeeMissing?: boolean
+  objectMissing?: boolean
   shows: number
   views: number
   contacts: number
@@ -28,9 +35,9 @@ export interface ResultStats {
 }
 
 export interface StatsResponse {
-  reportType: 'hr' | 'avito'
   reportId: string
   fileName: string
+  reportType: ReportType
   stats: ResultStats[]
 }
 
@@ -41,6 +48,7 @@ export interface MultiStatsResponse {
 export interface UploadResponse {
   id: string
   fileName: string
+  reportType: ReportType
   rows: number
   warnings?: string[]
 }

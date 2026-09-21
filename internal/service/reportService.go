@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,9 +21,9 @@ type ReportStore struct {
 
 // StoredReport — загруженный отчёт со всеми данными
 type StoredReport struct {
-	ReportType string
 	ID         string
 	FileName   string
+	ReportType models.ReportType
 	UserID     uint
 	CabinetID  string
 	Offers     []models.Offer
@@ -192,12 +193,23 @@ func groupKey(o models.Offer, groupBy string) string {
 	case "name":
 		return o.Name
 	case "employee":
-		return o.Employee
+		return displayDimension(o.Employee, "Сотрудник не указан")
 	case "object":
-		return o.Object
+		return displayDimension(o.Object, "Объект не указан")
 	default:
 		return o.City
 	}
+}
+
+func displayDimension(value, missingLabel string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return missingLabel
+	}
+	if value == missingLabel {
+		return value + " (значение из отчёта)"
+	}
+	return value
 }
 
 // GetTopListings возвращает топ-N индивидуальных объявлений по контактам (без агрегации)
@@ -224,7 +236,7 @@ func GetTopListings(offers []models.Offer, limit int) []models.ResultStats {
 			LookPhone:          o.LookPhone,
 			Response:           o.Response,
 			AvgResponsePrice:   canDivByZero(expense, float64(o.Response)),
-			ResponseConversion: canDivByZero(float64(o.Views), float64(o.Response)) * 100,
+			ResponseConversion: canDivByZero(float64(o.Response), float64(o.Views)) * 100,
 		})
 	}
 
@@ -276,11 +288,107 @@ func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 			LookPhone:          stat.LookPhone,
 			Response:           stat.Response,
 			AvgResponsePrice:   canDivByZero(stat.Promotion+stat.ViewersCost, float64(stat.Response)),
-			ResponseConversion: canDivByZero(float64(stat.Views), float64(stat.Response)) * 100,
+			ResponseConversion: canDivByZero(float64(stat.Response), float64(stat.Views)) * 100,
 		}
 		result = append(result, resultStat)
 	}
 	return result
+}
+
+// GetEmployeeObjectStats агрегирует метрики отдельно для каждой пары
+// «сотрудник — объект». Одинаковые объекты разных сотрудников не смешиваются.
+func GetEmployeeObjectStats(offers []models.Offer) []models.ResultStats {
+	type pair struct {
+		employee        string
+		object          string
+		employeeMissing bool
+		objectMissing   bool
+	}
+
+	statsByPair := make(map[pair]models.Stats)
+	for _, offer := range offers {
+		employee := strings.TrimSpace(offer.Employee)
+		object := strings.TrimSpace(offer.Object)
+		key := pair{
+			employee:        employee,
+			object:          object,
+			employeeMissing: employee == "",
+			objectMissing:   object == "",
+		}
+		stats := statsByPair[key]
+		stats.ListingCount++
+		stats.Contacts += offer.Contacts
+		stats.Favorite += offer.Favorite
+		stats.Promotion += offer.Promotion
+		stats.Views += offer.Views
+		stats.Shows += offer.Shows
+		stats.LookPhone += offer.LookPhone
+		stats.TargetViewers += offer.TargetViewers
+		stats.ViewWithMessage += offer.ViewWithMessage
+		stats.ViewersCost += offer.ViewersCost
+		stats.Response += offer.Response
+		statsByPair[key] = stats
+	}
+
+	result := make([]models.ResultStats, 0, len(statsByPair))
+	for key, stat := range statsByPair {
+		expense := stat.Promotion + stat.ViewersCost
+		employee := displayDimension(key.employee, "Сотрудник не указан")
+		object := displayDimension(key.object, "Объект не указан")
+		result = append(result, models.ResultStats{
+			Key:                object,
+			ListingCount:       stat.ListingCount,
+			Employee:           employee,
+			Object:             object,
+			EmployeeMissing:    key.employeeMissing,
+			ObjectMissing:      key.objectMissing,
+			Views:              stat.Views,
+			Favorite:           stat.Favorite,
+			Shows:              stat.Shows,
+			Contacts:           stat.Contacts,
+			Promotion:          stat.Promotion,
+			ViewersCost:        stat.ViewersCost,
+			PPConversion:       canDivByZero(float64(stat.Views), float64(stat.Shows)) * 100,
+			PKConversion:       canDivByZero(float64(stat.Contacts), float64(stat.Views)) * 100,
+			AvgViewPrice:       canDivByZero(expense, float64(stat.Views)),
+			AvgContactPrice:    canDivByZero(expense, float64(stat.Contacts)),
+			Expense:            expense,
+			TargetViewers:      stat.TargetViewers,
+			ViewWithMessage:    stat.ViewWithMessage,
+			LookPhone:          stat.LookPhone,
+			Response:           stat.Response,
+			AvgResponsePrice:   canDivByZero(expense, float64(stat.Response)),
+			ResponseConversion: canDivByZero(float64(stat.Response), float64(stat.Views)) * 100,
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		a, b := result[i], result[j]
+		if a.Employee != b.Employee {
+			return a.Employee < b.Employee
+		}
+		if a.EmployeeMissing != b.EmployeeMissing {
+			return !a.EmployeeMissing
+		}
+		if a.Object != b.Object {
+			return a.Object < b.Object
+		}
+		return !a.ObjectMissing && b.ObjectMissing
+	})
+
+	return result
+}
+
+// GetStatsForGroup возвращает строки для любого поддерживаемого режима группировки.
+func GetStatsForGroup(offers []models.Offer, groupBy string) []models.ResultStats {
+	switch groupBy {
+	case "offers":
+		return GetTopListings(offers, 10)
+	case "employee-object":
+		return GetEmployeeObjectStats(offers)
+	default:
+		return GetResultStats(GetGroupedStats(offers, groupBy))
+	}
 }
 
 // ExportXLSX формирует сводный result.xlsx на одном листе: города, категории, подкатегории, топ-10 объявлений
@@ -371,18 +479,33 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 		// Топ-10 объявлений
 		writeSection("Топ-10 объявлений по контактам", "Номер объявления", GetTopListings(report.Offers, 10), offerHeaders)
 
-		// HR: сотрудники и объекты (если есть данные)
-		groupHeaders := headers
-		if report.ReportType == "hr" {
-			groupHeaders = hrHeaders
-		}
-		empStats := GetResultStats(GetGroupedStats(report.Offers, "employee"))
-		if len(empStats) > 0 && empStats[0].Key != "" {
-			writeSection("По сотрудникам", "Сотрудник", empStats, groupHeaders)
-		}
-		objStats := GetResultStats(GetGroupedStats(report.Offers, "object"))
-		if len(objStats) > 0 && objStats[0].Key != "" {
-			writeSection("По объектам", "Объект", objStats, groupHeaders)
+		if report.ReportType == models.ReportTypeHR {
+			// HR: сотрудники и объекты (если есть данные)
+			empStats := GetResultStats(GetGroupedStats(report.Offers, "employee"))
+			if len(empStats) > 0 && empStats[0].Key != "" {
+				writeSection("По сотрудникам", "Сотрудник", empStats, hrHeaders)
+			}
+			objStats := GetResultStats(GetGroupedStats(report.Offers, "object"))
+			if len(objStats) > 0 && objStats[0].Key != "" {
+				writeSection("По объектам", "Объект", objStats, hrHeaders)
+			}
+
+			employeeObjects := GetEmployeeObjectStats(report.Offers)
+			for start := 0; start < len(employeeObjects); {
+				end := start + 1
+				for end < len(employeeObjects) &&
+					employeeObjects[end].Employee == employeeObjects[start].Employee &&
+					employeeObjects[end].EmployeeMissing == employeeObjects[start].EmployeeMissing {
+					end++
+				}
+				writeSection(
+					"Объекты сотрудника: "+employeeObjects[start].Employee,
+					"Объект",
+					employeeObjects[start:end],
+					hrHeaders,
+				)
+				start = end
+			}
 		}
 	}
 
@@ -601,7 +724,8 @@ func topN(m map[string]int, n int) []models.TopItem {
 }
 
 // ComparePeriods сравнивает два периода и возвращает дельту
-func ComparePeriods(early, late []models.Offer, groupBy string, includeMissingGroups bool) models.CompareResponse {
+func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareResponse {
+	includeMissingGroups := groupBy == "employee" || groupBy == "object"
 	earlyStats := GetGroupedStats(early, groupBy)
 	lateStats := GetGroupedStats(late, groupBy)
 	// HR counts must include groups that disappeared in the later period.
@@ -630,27 +754,31 @@ func ComparePeriods(early, late []models.Offer, groupBy string, includeMissingGr
 				Key: s.Key, ListingCount: s.ListingCount, Shows: s.Shows, Views: s.Views, Contacts: s.Contacts,
 				PPConversion: s.PPConversion, PKConversion: s.PKConversion,
 				AvgViewPrice: s.AvgViewPrice, AvgContactPrice: s.AvgContactPrice,
-				Expense: s.Expense,
+				Expense: s.Expense, Response: s.Response,
+				ResponseConversion: s.ResponseConversion, AvgResponsePrice: s.AvgResponsePrice,
 			})
 			continue
 		}
 		delta = append(delta, models.ResultStats{
-			Key:             s.Key,
-			ListingCount:    s.ListingCount - e.ListingCount,
-			Shows:           s.Shows - e.Shows,
-			Views:           s.Views - e.Views,
-			Contacts:        s.Contacts - e.Contacts,
-			Favorite:        s.Favorite - e.Favorite,
-			Promotion:       s.Promotion - e.Promotion,
-			ViewersCost:     s.ViewersCost - e.ViewersCost,
-			TargetViewers:   s.TargetViewers - e.TargetViewers,
-			ViewWithMessage: s.ViewWithMessage - e.ViewWithMessage,
-			LookPhone:       s.LookPhone - e.LookPhone,
-			PPConversion:    s.PPConversion - e.PPConversion,
-			PKConversion:    s.PKConversion - e.PKConversion,
-			AvgViewPrice:    s.AvgViewPrice - e.AvgViewPrice,
-			AvgContactPrice: s.AvgContactPrice - e.AvgContactPrice,
-			Expense:         s.Expense - e.Expense,
+			ListingCount:       s.ListingCount - e.ListingCount,
+			Key:                s.Key,
+			Shows:              s.Shows - e.Shows,
+			Views:              s.Views - e.Views,
+			Contacts:           s.Contacts - e.Contacts,
+			Favorite:           s.Favorite - e.Favorite,
+			Promotion:          s.Promotion - e.Promotion,
+			ViewersCost:        s.ViewersCost - e.ViewersCost,
+			TargetViewers:      s.TargetViewers - e.TargetViewers,
+			ViewWithMessage:    s.ViewWithMessage - e.ViewWithMessage,
+			LookPhone:          s.LookPhone - e.LookPhone,
+			PPConversion:       s.PPConversion - e.PPConversion,
+			PKConversion:       s.PKConversion - e.PKConversion,
+			AvgViewPrice:       s.AvgViewPrice - e.AvgViewPrice,
+			AvgContactPrice:    s.AvgContactPrice - e.AvgContactPrice,
+			Expense:            s.Expense - e.Expense,
+			Response:           s.Response - e.Response,
+			ResponseConversion: s.ResponseConversion - e.ResponseConversion,
+			AvgResponsePrice:   s.AvgResponsePrice - e.AvgResponsePrice,
 		})
 	}
 

@@ -23,7 +23,7 @@ func main() {
 	if err := database.Init(cfg); err != nil {
 		log.Fatal("Ошибка БД:", err)
 	}
-	if err := database.Migrate(&database.User{}); err != nil {
+	if err := database.Migrate(&database.User{}, &database.ObjectMapping{}); err != nil {
 		log.Fatal("Ошибка миграции:", err)
 	}
 	if err := database.SeedAdmin(); err != nil {
@@ -34,7 +34,10 @@ func main() {
 
 	store := service.NewReportStore()
 	cabinetStore := service.NewCabinetStore()
-	objectStore := service.NewObjectStore()
+	objectStore, err := service.NewPersistentObjectStore(database.DB)
+	if err != nil {
+		log.Fatal("Ошибка загрузки маппинга объектов:", err)
+	}
 	reportHandler := handler.NewHandler(store, objectStore)
 	authHandler := handler.NewAuthHandler()
 	cabinetHandler := handler.NewCabinetHandler(cabinetStore, store)

@@ -1,5 +1,12 @@
 package models
 
+type ReportType string
+
+const (
+	ReportTypeRegular ReportType = "regular"
+	ReportTypeHR      ReportType = "hr"
+)
+
 // Offer — сырое объявление из отчёта Avito
 type Offer struct {
 	City            string  `json:"city"`
@@ -42,6 +49,10 @@ type ResultStats struct {
 	Number             int     `json:"number,omitempty"`
 	Key                string  `json:"key"`
 	City               string  `json:"city,omitempty"`
+	Employee           string  `json:"employee,omitempty"`
+	Object             string  `json:"object,omitempty"`
+	EmployeeMissing    bool    `json:"employeeMissing,omitempty"`
+	ObjectMissing      bool    `json:"objectMissing,omitempty"`
 	Views              int     `json:"views"`
 	Shows              int     `json:"shows"`
 	Favorite           int     `json:"favorite"`
@@ -80,37 +91,40 @@ type StatsSummary struct {
 
 // PeriodStats — статистика периода
 type PeriodStats struct {
-	ReportType string        `json:"reportType"`
+	ReportType ReportType    `json:"reportType"`
 	Summary    StatsSummary  `json:"summary"`
 	Stats      []ResultStats `json:"stats"`
 }
 
 // CompareResponse — сравнение двух периодов
 type CompareResponse struct {
-	Early PeriodStats   `json:"early"`
-	Late  PeriodStats   `json:"late"`
-	Delta []ResultStats `json:"delta"`
+	Early       PeriodStats   `json:"early"`
+	Late        PeriodStats   `json:"late"`
+	Delta       []ResultStats `json:"delta"`
+	ReportTypes []ReportType  `json:"reportTypes"`
 }
 
 // --- API-структуры ---
 
 type UploadResponse struct {
-	ID       string   `json:"id"`
-	FileName string   `json:"fileName"`
-	Rows     int      `json:"rows"`
-	Warnings []string `json:"warnings,omitempty"`
-	Columns  []string `json:"columns,omitempty"`
+	ID         string     `json:"id"`
+	FileName   string     `json:"fileName"`
+	ReportType ReportType `json:"reportType"`
+	Rows       int        `json:"rows"`
+	Warnings   []string   `json:"warnings,omitempty"`
+	Columns    []string   `json:"columns,omitempty"`
 }
 
 type ReportInfo struct {
-	ID       string `json:"id"`
-	FileName string `json:"fileName"`
+	ID         string     `json:"id"`
+	FileName   string     `json:"fileName"`
+	ReportType ReportType `json:"reportType"`
 }
 
 type StatsResponse struct {
-	ReportType string        `json:"reportType"`
 	ReportID   string        `json:"reportId"`
 	FileName   string        `json:"fileName"`
+	ReportType ReportType    `json:"reportType"`
 	Stats      []ResultStats `json:"stats"`
 	Summary    StatsSummary  `json:"summary"`
 }

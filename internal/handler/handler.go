@@ -23,7 +23,23 @@ func NewHandler(store *service.ReportStore, objectStore *service.ObjectStore) *H
 	return &Handler{store: store, objectStore: objectStore}
 }
 
+func parseReportType(value string) (models.ReportType, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "regular", "avito":
+		return models.ReportTypeRegular, true
+	case "hr":
+		return models.ReportTypeHR, true
+	default:
+		return "", false
+	}
+}
+
 func (h *Handler) UploadReport(c *gin.Context) {
+	reportType, ok := parseReportType(c.PostForm("type"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "неизвестный тип отчёта"})
+		return
+	}
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "файл не найден в запросе: " + err.Error()})
@@ -43,28 +59,25 @@ func (h *Handler) UploadReport(c *gin.Context) {
 		userID = claims.UserID
 	}
 	cabinetID := c.PostForm("cabinetId")
-	reportType := "avito"
-	if c.PostForm("type") == "hr" {
-		reportType = "hr"
-	}
 
 	id := uuid.New().String()
 	h.store.Add(id, &service.StoredReport{
 		ID:         id,
 		FileName:   header.Filename,
+		ReportType: reportType,
 		UserID:     userID,
 		CabinetID:  cabinetID,
-		ReportType: reportType,
 		Offers:     offers,
 		File:       excelFile,
 	})
 
 	c.JSON(http.StatusOK, models.UploadResponse{
-		ID:       id,
-		FileName: header.Filename,
-		Rows:     len(offers),
-		Warnings: warnings,
-		Columns:  foundColumns,
+		ID:         id,
+		FileName:   header.Filename,
+		ReportType: reportType,
+		Rows:       len(offers),
+		Warnings:   warnings,
+		Columns:    foundColumns,
 	})
 }
 
@@ -73,7 +86,7 @@ func (h *Handler) ListReports(c *gin.Context) {
 	reports := h.store.ListByUser(claims.UserID)
 	result := make([]models.ReportInfo, len(reports))
 	for i, r := range reports {
-		result[i] = models.ReportInfo{ID: r.ID, FileName: r.FileName}
+		result[i] = models.ReportInfo{ID: r.ID, FileName: r.FileName, ReportType: r.ReportType}
 	}
 	c.JSON(http.StatusOK, result)
 }
@@ -87,19 +100,17 @@ func (h *Handler) GetStats(c *gin.Context) {
 	}
 
 	groupBy := c.DefaultQuery("groupBy", "city")
-	var resultStats []models.ResultStats
-	if groupBy == "offers" {
-		resultStats = service.GetTopListings(report.Offers, 10)
-	} else {
-		statsMap := service.GetGroupedStats(report.Offers, groupBy)
-		resultStats = service.GetResultStats(statsMap)
+	if !isGroupAllowed(report.ReportType, groupBy) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "группировка недоступна для выбранного типа отчёта"})
+		return
 	}
+	resultStats := service.GetStatsForGroup(report.Offers, groupBy)
 	summary := service.GetSummary(report.Offers)
 
 	c.JSON(http.StatusOK, models.StatsResponse{
-		ReportType: report.ReportType,
 		ReportID:   report.ID,
 		FileName:   report.FileName,
+		ReportType: report.ReportType,
 		Stats:      resultStats,
 		Summary:    summary,
 	})
@@ -163,17 +174,14 @@ func (h *Handler) MultiStats(c *gin.Context) {
 		if report == nil || !h.ownsReport(c, report) {
 			continue
 		}
-		var resultStats []models.ResultStats
-		if groupBy == "offers" {
-			resultStats = service.GetTopListings(report.Offers, 10)
-		} else {
-			statsMap := service.GetGroupedStats(report.Offers, groupBy)
-			resultStats = service.GetResultStats(statsMap)
+		if !isGroupAllowed(report.ReportType, groupBy) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "группировка недоступна для выбранного типа отчёта"})
+			return
 		}
+		resultStats := service.GetStatsForGroup(report.Offers, groupBy)
 		summary := service.GetSummary(report.Offers)
 		result = append(result, models.StatsResponse{
-			ReportType: report.ReportType,
-			ReportID:   report.ID, FileName: report.FileName,
+			ReportID: report.ID, FileName: report.FileName, ReportType: report.ReportType,
 			Stats: resultStats, Summary: summary,
 		})
 	}
@@ -202,9 +210,9 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	}
 
 	type indexedReport struct {
-		reportType string
 		id         string
 		offers     []models.Offer
+		reportType models.ReportType
 		created    time.Time
 	}
 	var reports []indexedReport
@@ -214,8 +222,12 @@ func (h *Handler) CompareReports(c *gin.Context) {
 		if r == nil || !h.ownsReport(c, r) {
 			continue
 		}
+		if !isCompareGroupAllowed(r.ReportType, groupBy) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "группировка недоступна для выбранного типа отчёта"})
+			return
+		}
 		t := parseDateFromFilename(r.FileName)
-		reports = append(reports, indexedReport{id: r.ID, offers: r.Offers, created: t, reportType: r.ReportType})
+		reports = append(reports, indexedReport{id: r.ID, offers: r.Offers, reportType: r.ReportType, created: t})
 	}
 
 	if len(reports) < 2 {
@@ -229,10 +241,13 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	late := reports[len(reports)-1].offers
 
 	earlyType, lateType := reports[0].reportType, reports[len(reports)-1].reportType
-	includeMissing := earlyType == "hr" && lateType == "hr" && (groupBy == "employee" || groupBy == "object")
-	result := service.ComparePeriods(early, late, compareGroupBy, includeMissing)
+	result := service.ComparePeriods(early, late, compareGroupBy)
 	result.Early.ReportType = earlyType
 	result.Late.ReportType = lateType
+	result.ReportTypes = make([]models.ReportType, len(reports))
+	for i, report := range reports {
+		result.ReportTypes[i] = report.reportType
+	}
 	c.JSON(http.StatusOK, result)
 }
 
@@ -242,6 +257,21 @@ func (h *Handler) ownsReport(c *gin.Context, report *service.StoredReport) bool 
 		return false
 	}
 	return report.UserID == claims.UserID
+}
+
+func isGroupAllowed(reportType models.ReportType, groupBy string) bool {
+	switch groupBy {
+	case "city", "category", "name", "offers":
+		return true
+	case "employee", "object", "employee-object":
+		return reportType == models.ReportTypeHR
+	default:
+		return false
+	}
+}
+
+func isCompareGroupAllowed(reportType models.ReportType, groupBy string) bool {
+	return groupBy != "employee-object" && isGroupAllowed(reportType, groupBy)
 }
 
 func parseDateFromFilename(name string) time.Time {

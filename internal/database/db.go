@@ -66,3 +66,11 @@ type User struct {
 	Password string `gorm:"not null" json:"-"`
 	Role     string `gorm:"size:20;not null;default:guest" json:"role"`
 }
+
+// ObjectMapping хранит постоянную связь номера объявления с объектом.
+type ObjectMapping struct {
+	ListingNumber string    `gorm:"primaryKey;size:128" json:"listingNumber"`
+	ObjectName    string    `gorm:"size:512;not null" json:"objectName"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}

@@ -97,7 +97,7 @@ func getTestJSON(t *testing.T, r http.Handler, path string) map[string]any {
 }
 
 func TestCompareHRListingCounts(t *testing.T) {
-	for _, types := range [][2]string{{"hr", "hr"}, {"hr", "avito"}, {"avito", "hr"}, {"avito", "avito"}} {
+	for _, types := range [][2]string{{"hr", "hr"}, {"hr", "regular"}, {"regular", "hr"}, {"regular", "regular"}} {
 		for _, group := range []string{"employee", "object", "city"} {
 			t.Run(types[0]+"/"+types[1]+"/"+group, func(t *testing.T) {
 				r, store := reportTestRouter()
@@ -114,6 +114,14 @@ func TestCompareHRListingCounts(t *testing.T) {
 				added.City = "Новый"
 				store.Get(earlyID).Offers = append(store.Get(earlyID).Offers, gone)
 				store.Get(lateID).Offers = append(store.Get(lateID).Offers, added)
+				if group != "city" && (types[0] != "hr" || types[1] != "hr") {
+					w := httptest.NewRecorder()
+					r.ServeHTTP(w, httptest.NewRequest("GET", "/reports/compare?ids="+lateID+","+earlyID+"&groupBy="+group, nil))
+					if w.Code != 400 {
+						t.Fatalf("non-HR grouping status = %d", w.Code)
+					}
+					return
+				}
 				result := getTestJSON(t, r, "/reports/compare?ids="+lateID+","+earlyID+"&groupBy="+group)
 				early := result["early"].(map[string]any)
 				late := result["late"].(map[string]any)
@@ -208,24 +216,28 @@ func TestHRExportColumnPlacement(t *testing.T) {
 			}
 		}
 	}
-	if counts != 2 {
-		t.Fatalf("HR sections=%d, want 2", counts)
+	if counts != 3 {
+		t.Fatalf("HR sections=%d, want 3", counts)
 	}
 }
 
 func TestUploadReportTypeAndGroupedStats(t *testing.T) {
-	for _, typ := range []string{"hr", "avito", "", "unknown"} {
+	for _, typ := range []string{"hr", "regular", "avito", ""} {
 		t.Run("type="+typ, func(t *testing.T) {
 			r, store := reportTestRouter()
 			id := uploadTestReport(t, r, typ, "2026-01-01.xlsx", 2)
-			wantType := "avito"
+			wantType := "regular"
 			if typ == "hr" {
 				wantType = "hr"
 			}
 			if store.Get(id).CabinetID != "cabinet" {
 				t.Fatal("cabinet lost")
 			}
-			for _, group := range []string{"employee", "object"} {
+			groups := []string{"city"}
+			if typ == "hr" {
+				groups = []string{"employee", "object", "employee-object"}
+			}
+			for _, group := range groups {
 				single := getTestJSON(t, r, "/reports/"+id+"/stats?groupBy="+group)
 				multi := getTestJSON(t, r, "/reports/multi?ids="+id+"&groupBy="+group)
 				for _, result := range []map[string]any{single, multi["reports"].([]any)[0].(map[string]any)} {

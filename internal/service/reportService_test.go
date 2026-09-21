@@ -16,8 +16,8 @@ func TestGroupedListingCount(t *testing.T) {
 	for _, group := range []string{"employee", "object"} {
 		t.Run(group, func(t *testing.T) {
 			rows := GetResultStats(GetGroupedStats(offers, group))
-			if len(rows) != 2 {
-				t.Fatalf("got %d groups, want 2", len(rows))
+			if len(rows) != 3 {
+				t.Fatalf("got %d groups, want 3", len(rows))
 			}
 			for _, row := range rows {
 				raw, _ := json.Marshal(row)
