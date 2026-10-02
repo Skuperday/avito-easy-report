@@ -2,13 +2,13 @@ name: Deploy to VPS
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
   workflow_dispatch:
     inputs:
       branch:
         description: 'Ветка для деплоя'
         required: true
-        default: 'main'
+        default: 'develop'
 
 jobs:
   deploy:
