@@ -31,6 +31,7 @@ type Offer struct {
 
 // Stats — агрегированная статистика по ключу группировки
 type Stats struct {
+	ListingCount    int     `json:"listingCount"`
 	Views           int     `json:"views"`
 	Shows           int     `json:"shows"`
 	Favorite        int     `json:"favorite"`
@@ -45,6 +46,7 @@ type Stats struct {
 
 // ResultStats — строка результата с группировкой
 type ResultStats struct {
+	ListingCount       int     `json:"listingCount"`
 	Number             int     `json:"number,omitempty"`
 	Key                string  `json:"key"`
 	City               string  `json:"city,omitempty"`
@@ -90,8 +92,9 @@ type StatsSummary struct {
 
 // PeriodStats — статистика периода
 type PeriodStats struct {
-	Summary StatsSummary  `json:"summary"`
-	Stats   []ResultStats `json:"stats"`
+	ReportType ReportType    `json:"reportType"`
+	Summary    StatsSummary  `json:"summary"`
+	Stats      []ResultStats `json:"stats"`
 }
 
 // CompareResponse — сравнение двух периодов

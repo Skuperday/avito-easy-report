@@ -170,6 +170,7 @@ func GetGroupedStats(offers []models.Offer, groupBy string) map[string]models.St
 			continue
 		}
 		stats := result[key]
+		stats.ListingCount++
 		stats.Contacts += offer.Contacts
 		stats.Favorite += offer.Favorite
 		stats.Promotion += offer.Promotion
@@ -272,6 +273,7 @@ func GetResultStats(stats map[string]models.Stats) []models.ResultStats {
 	for key, stat := range stats {
 		resultStat := models.ResultStats{
 			Key:                key,
+			ListingCount:       stat.ListingCount,
 			Views:              stat.Views,
 			Favorite:           stat.Favorite,
 			Shows:              stat.Shows,
@@ -316,6 +318,7 @@ func GetEmployeeObjectStats(offers []models.Offer) []models.ResultStats {
 			objectMissing:   object == "",
 		}
 		stats := statsByPair[key]
+		stats.ListingCount++
 		stats.Contacts += offer.Contacts
 		stats.Favorite += offer.Favorite
 		stats.Promotion += offer.Promotion
@@ -336,6 +339,7 @@ func GetEmployeeObjectStats(offers []models.Offer) []models.ResultStats {
 		object := displayDimension(key.object, "Объект не указан")
 		result = append(result, models.ResultStats{
 			Key:                object,
+			ListingCount:       stat.ListingCount,
 			Employee:           employee,
 			Object:             object,
 			EmployeeMissing:    key.employeeMissing,
@@ -400,8 +404,8 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 	// Заголовки без колонок откликов (обычный отчёт)
 	regularHeaders := []string{"", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Избранное"}
 	regularOfferHeaders := []string{"Номер объявления", "Город", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Избранное"}
-	// Заголовки с колонками откликов (HR-отчёт)
-	hrHeaders := []string{"", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика", "Избранное"}
+	// Заголовки HR: «Количество объявлений» + колонки откликов
+	hrHeaders := []string{"", "Количество объявлений", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика", "Избранное"}
 	hrOfferHeaders := []string{"Номер объявления", "Город", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика", "Избранное"}
 
 	row := 1
@@ -430,6 +434,7 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 
 	writeSection := func(title string, firstCol string, stats []models.ResultStats, hdrs []string, includeResponse bool) {
 		// Подставляем название первой колонки
+		hdrs = append([]string(nil), hdrs...)
 		hdrs[0] = firstCol
 		// Заголовок секции — жирный
 		titleCell := cell(1, row)
@@ -444,6 +449,9 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 			offset := 0
 			if hdrs[0] == "Номер объявления" {
 				_ = file.SetCellValue(sheet, cell(2, row), s.City)
+				offset = 1
+			} else if hdrs[1] == "Количество объявлений" {
+				_ = file.SetCellValue(sheet, cell(2, row), s.ListingCount)
 				offset = 1
 			}
 			_ = file.SetCellValue(sheet, cell(2+offset, row), s.Shows)
@@ -739,8 +747,17 @@ func topN(m map[string]int, n int) []models.TopItem {
 
 // ComparePeriods сравнивает два периода и возвращает дельту
 func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareResponse {
+	includeMissingGroups := groupBy == "employee" || groupBy == "object"
 	earlyStats := GetGroupedStats(early, groupBy)
 	lateStats := GetGroupedStats(late, groupBy)
+	// HR counts must include groups that disappeared in the later period.
+	if includeMissingGroups {
+		for key := range earlyStats {
+			if _, ok := lateStats[key]; !ok {
+				lateStats[key] = models.Stats{}
+			}
+		}
+	}
 	earlyResult := GetResultStats(earlyStats)
 	lateResult := GetResultStats(lateStats)
 
@@ -756,7 +773,7 @@ func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareRe
 		if !ok {
 			// Новый город/категория — вся статистика как прирост
 			delta = append(delta, models.ResultStats{
-				Key: s.Key, Shows: s.Shows, Views: s.Views, Contacts: s.Contacts,
+				Key: s.Key, ListingCount: s.ListingCount, Shows: s.Shows, Views: s.Views, Contacts: s.Contacts,
 				PPConversion: s.PPConversion, PKConversion: s.PKConversion,
 				AvgViewPrice: s.AvgViewPrice, AvgContactPrice: s.AvgContactPrice,
 				Expense: s.Expense, Response: s.Response,
@@ -765,6 +782,7 @@ func ComparePeriods(early, late []models.Offer, groupBy string) models.CompareRe
 			continue
 		}
 		delta = append(delta, models.ResultStats{
+			ListingCount:       s.ListingCount - e.ListingCount,
 			Key:                s.Key,
 			Shows:              s.Shows - e.Shows,
 			Views:              s.Views - e.Views,

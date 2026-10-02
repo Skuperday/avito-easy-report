@@ -22,6 +22,7 @@
           <thead><tr>
             <th>{{ groupLabel }}</th>
             <th v-if="groupBy === 'offers'">Город</th>
+            <th v-if="showCompareListingCount" class="text-right" colspan="3">Количество объявлений</th>
             <th class="text-right" colspan="3">Показы</th>
             <th class="text-right" colspan="3">ПП%</th>
             <th class="text-right" colspan="3">Просмотры</th>
@@ -37,6 +38,9 @@
           <tr class="text-xs muted">
             <th></th>
             <th v-if="groupBy === 'offers'"></th>
+            <template v-if="showCompareListingCount">
+              <th class="text-right">П1</th><th class="text-right">П2</th><th class="text-right">Δ</th>
+            </template>
             <th class="text-right">П1</th><th class="text-right">П2</th><th class="text-right">Δ</th>
             <th class="text-right">П1</th><th class="text-right">П2</th><th class="text-right">Δ</th>
             <th class="text-right">П1</th><th class="text-right">П2</th><th class="text-right">Δ</th>
@@ -54,6 +58,11 @@
               <td class="font-bold">{{ groupBy === 'offers' ? (s.key || s.number) : s.key }}</td>
               <td v-if="groupBy === 'offers'" class="text-xs muted">{{ s.city }}</td>
               <!-- Показы (compare) -->
+              <template v-if="showCompareListingCount">
+                <td class="text-right muted">{{ fmt(earlyRow(i)?.listingCount) }}</td>
+                <td class="text-right">{{ fmt(lateRow(i)?.listingCount) }}</td>
+                <td class="text-right" :style="{ color: s.listingCount >= 0 ? '#22c55e' : 'var(--destructive)' }">{{ s.listingCount >= 0 ? '+' : '' }}{{ fmt(s.listingCount) }}</td>
+              </template>
               <td class="text-right muted">{{ fmt(earlyRow(i)?.shows) }}</td>
               <td class="text-right">{{ fmt(lateRow(i)?.shows) }}</td>
               <td class="text-right" :style="{ color: s.shows >= 0 ? '#22c55e' : 'var(--destructive)' }">{{ s.shows >= 0 ? '+' : '' }}{{ fmt(s.shows) }}</td>
@@ -124,6 +133,7 @@
               <table class="data-table compact">
                 <thead><tr>
                   <th>Объект</th>
+                  <th class="text-right">Количество объявлений</th>
                   <th class="text-right">Показы</th>
                   <th class="text-right">ПП%</th>
                   <th class="text-right">Просмотры</th>
@@ -139,6 +149,7 @@
                 <tbody>
                   <tr v-for="s in sorted(group.rows)" :key="`${s.employeeMissing}:${s.employee}:${s.objectMissing}:${s.object}`">
                     <td class="font-bold">{{ s.object }}</td>
+                    <td class="text-right">{{ fmt(s.listingCount) }}</td>
                     <td class="text-right">{{ fmt(s.shows) }}</td>
                     <td class="text-right">{{ fmt(s.ppConversion, 1) }}%</td>
                     <td class="text-right">{{ fmt(s.views) }}</td>
@@ -162,6 +173,7 @@
             <thead><tr>
               <th class="cursor-pointer select-none" @click="toggleSort(groupBy === 'offers' ? 'number' : 'key')">{{ groupLabel }} <span class="muted">{{ sortIcon(groupBy === 'offers' ? 'number' : 'key') }}</span></th>
               <th v-if="groupBy === 'offers'" class="cursor-pointer select-none" @click="toggleSort('city')">Город <span class="muted">{{ sortIcon('city') }}</span></th>
+              <th v-if="isHRGroup && r.reportType === 'hr'" class="text-right cursor-pointer select-none" @click="toggleSort('listingCount')">Количество объявлений <span class="muted">{{ sortIcon('listingCount') }}</span></th>
               <th class="text-right cursor-pointer select-none" @click="toggleSort('shows')">Показы <span class="muted">{{ sortIcon('shows') }}</span></th>
               <th class="text-right cursor-pointer select-none" @click="toggleSort('ppConversion')">ПП% <span class="muted">{{ sortIcon('ppConversion') }}</span></th>
               <th class="text-right cursor-pointer select-none" @click="toggleSort('views')">Просмотры <span class="muted">{{ sortIcon('views') }}</span></th>
@@ -178,6 +190,7 @@
               <tr v-for="s in sorted(r.stats)" :key="s.key">
                 <td class="font-bold">{{ groupBy === 'offers' ? (s.key || s.number) : s.key }}</td>
                 <td v-if="groupBy === 'offers'" class="text-xs muted">{{ s.city }}</td>
+                <td v-if="isHRGroup && r.reportType === 'hr'" class="text-right">{{ fmt(s.listingCount) }}</td>
                 <td class="text-right">{{ fmt(s.shows) }}</td>
                 <td class="text-right">{{ fmt(s.ppConversion, 1) }}%</td>
                 <td class="text-right">{{ fmt(s.views) }}</td>
@@ -215,6 +228,8 @@ const loading = ref(true)
 const error = ref('')
 const groupBy = ref('city')
 const isCompare = ref(false)
+const isHRGroup = computed(() => groupBy.value === 'employee' || groupBy.value === 'object')
+const showCompareListingCount = computed(() => isHRGroup.value && compareData.value?.early?.reportType === 'hr' && compareData.value?.late?.reportType === 'hr')
 
 const sortKey = ref('contacts')
 const sortDir = ref<'asc' | 'desc'>('desc')

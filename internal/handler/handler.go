@@ -240,7 +240,10 @@ func (h *Handler) CompareReports(c *gin.Context) {
 	early := reports[0].offers
 	late := reports[len(reports)-1].offers
 
+	earlyType, lateType := reports[0].reportType, reports[len(reports)-1].reportType
 	result := service.ComparePeriods(early, late, compareGroupBy)
+	result.Early.ReportType = earlyType
+	result.Late.ReportType = lateType
 	result.ReportTypes = make([]models.ReportType, len(reports))
 	for i, report := range reports {
 		result.ReportTypes[i] = report.reportType

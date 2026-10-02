@@ -10,6 +10,7 @@ export interface ResultStats {
   number?: number
   key: string
   city?: string
+  listingCount: number
   employee?: string
   object?: string
   employeeMissing?: boolean
