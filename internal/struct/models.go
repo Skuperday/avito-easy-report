@@ -10,6 +10,7 @@ const (
 // Offer — сырое объявление из отчёта Avito
 type Offer struct {
 	City            string  `json:"city"`
+	Region          string  `json:"region,omitempty"`
 	Category        string  `json:"category"`
 	SubCategory     string  `json:"subCategory"`
 	ListingNumber   string  `json:"listingNumber"`

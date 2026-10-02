@@ -258,7 +258,7 @@ func (h *Handler) ownsReport(c *gin.Context, report *service.StoredReport) bool 
 
 func isGroupAllowed(reportType models.ReportType, groupBy string) bool {
 	switch groupBy {
-	case "city", "category", "name", "offers":
+	case "city", "region", "category", "name", "offers":
 		return true
 	case "employee", "object", "employee-object":
 		return reportType == models.ReportTypeHR

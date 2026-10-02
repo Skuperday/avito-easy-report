@@ -189,6 +189,8 @@ func groupKey(o models.Offer, groupBy string) string {
 	switch groupBy {
 	case "category":
 		return o.Category
+	case "region":
+		return o.Region
 	case "name":
 		return o.Name
 	case "employee":
@@ -395,8 +397,12 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 	sheet := "Sheet1"
 	_ = file.SetColWidth(sheet, "A", "M", 15)
 
-	headers := []string{"", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика", "Избранное"}
-	offerHeaders := []string{"Номер объявления", "Город", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика"}
+	// Заголовки без колонок откликов (обычный отчёт)
+	regularHeaders := []string{"", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Избранное"}
+	regularOfferHeaders := []string{"Номер объявления", "Город", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Избранное"}
+	// Заголовки с колонками откликов (HR-отчёт)
+	hrHeaders := []string{"", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика", "Избранное"}
+	hrOfferHeaders := []string{"Номер объявления", "Город", "Показы", "ПП%", "Просмотры", "ПК%", "Контакты", "Расход", "Ср. цена контакта", "Отклики", "Конв. в отклик", "Ср. цена отклика", "Избранное"}
 
 	row := 1
 	cell := func(col, r int) string {
@@ -422,7 +428,7 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#C6EFCE"}, Pattern: 1},
 	})
 
-	writeSection := func(title string, firstCol string, stats []models.ResultStats, hdrs []string) {
+	writeSection := func(title string, firstCol string, stats []models.ResultStats, hdrs []string, includeResponse bool) {
 		// Подставляем название первой колонки
 		hdrs[0] = firstCol
 		// Заголовок секции — жирный
@@ -447,10 +453,14 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 			_ = file.SetCellValue(sheet, cell(6+offset, row), s.Contacts)
 			_ = file.SetCellValue(sheet, cell(7+offset, row), fmt.Sprintf("%.2f", s.Expense))
 			_ = file.SetCellValue(sheet, cell(8+offset, row), fmt.Sprintf("%.2f", s.AvgContactPrice))
-			_ = file.SetCellValue(sheet, cell(9+offset, row), s.Response)
-			_ = file.SetCellValue(sheet, cell(10+offset, row), fmt.Sprintf("%.2f%%", s.ResponseConversion))
-			_ = file.SetCellValue(sheet, cell(11+offset, row), fmt.Sprintf("%.2f", s.AvgResponsePrice))
-			_ = file.SetCellValue(sheet, cell(12+offset, row), s.Favorite)
+			if includeResponse {
+				_ = file.SetCellValue(sheet, cell(9+offset, row), s.Response)
+				_ = file.SetCellValue(sheet, cell(10+offset, row), fmt.Sprintf("%.2f%%", s.ResponseConversion))
+				_ = file.SetCellValue(sheet, cell(11+offset, row), fmt.Sprintf("%.2f", s.AvgResponsePrice))
+				_ = file.SetCellValue(sheet, cell(12+offset, row), s.Favorite)
+			} else {
+				_ = file.SetCellValue(sheet, cell(9+offset, row), s.Favorite)
+			}
 			row++
 		}
 		row++ // пустая строка-разделитель
@@ -461,24 +471,34 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 		_ = file.SetCellValue(sheet, cell(1, row), "Отчёт: "+report.FileName)
 		row += 2
 
+		isHR := report.ReportType == models.ReportTypeHR
+		headers := regularHeaders
+		offerHeaders := regularOfferHeaders
+		if isHR {
+			headers = hrHeaders
+			offerHeaders = hrOfferHeaders
+		}
+
+		// Регионы
+		writeSection("По регионам", "Регион", GetResultStats(GetGroupedStats(report.Offers, "region")), headers, isHR)
 		// Города
-		writeSection("По городам", "Город", GetResultStats(GetGroupedStats(report.Offers, "city")), headers)
+		writeSection("По городам", "Город", GetResultStats(GetGroupedStats(report.Offers, "city")), headers, isHR)
 		// Категории
-		writeSection("По категориям", "Категория", GetResultStats(GetGroupedStats(report.Offers, "category")), headers)
+		writeSection("По категориям", "Категория", GetResultStats(GetGroupedStats(report.Offers, "category")), headers, isHR)
 		// Подкатегории
-		writeSection("По подкатегориям", "Подкатегория", GetResultStats(GetGroupedStats(report.Offers, "name")), headers)
+		writeSection("По подкатегориям", "Подкатегория", GetResultStats(GetGroupedStats(report.Offers, "name")), headers, isHR)
 		// Топ-10 объявлений
-		writeSection("Топ-10 объявлений по контактам", "Номер объявления", GetTopListings(report.Offers, 10), offerHeaders)
+		writeSection("Топ-10 объявлений по контактам", "Номер объявления", GetTopListings(report.Offers, 10), offerHeaders, isHR)
 
 		if report.ReportType == models.ReportTypeHR {
 			// HR: сотрудники и объекты (если есть данные)
 			empStats := GetResultStats(GetGroupedStats(report.Offers, "employee"))
 			if len(empStats) > 0 && empStats[0].Key != "" {
-				writeSection("По сотрудникам", "Сотрудник", empStats, headers)
+				writeSection("По сотрудникам", "Сотрудник", empStats, headers, true)
 			}
 			objStats := GetResultStats(GetGroupedStats(report.Offers, "object"))
 			if len(objStats) > 0 && objStats[0].Key != "" {
-				writeSection("По объектам", "Объект", objStats, headers)
+				writeSection("По объектам", "Объект", objStats, headers, true)
 			}
 
 			employeeObjects := GetEmployeeObjectStats(report.Offers)
@@ -494,6 +514,7 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 					"Объект",
 					employeeObjects[start:end],
 					headers,
+					true,
 				)
 				start = end
 			}
@@ -509,6 +530,7 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 func parseRow(row []string, columnIndex map[string]int) models.Offer {
 	return models.Offer{
 		City:            safeGet(row, columnIndex["city"]),
+		Region:          safeGet(row, columnIndex["region"]),
 		Category:        safeGet(row, columnIndex["category"]),
 		SubCategory:     safeGet(row, columnIndex["subCategory"]),
 		ListingNumber:   safeGet(row, columnIndex["listingNumber"]),
@@ -589,6 +611,7 @@ func getColumnIndexMap(row []string) (map[string]int, []string) {
 	// Маппинг ключ → список возможных названий колонок
 	mappings := map[string][]string{
 		"city":            {"Город"},
+		"region":          {"Регион размещения", "Регион"},
 		"category":        {"Категория"},
 		"subCategory":     {"Подкатегория"},
 		"shows":           {"Показы"},
