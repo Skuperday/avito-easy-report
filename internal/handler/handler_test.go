@@ -184,10 +184,10 @@ func TestHRExportColumnPlacement(t *testing.T) {
 		if len(row) == 0 {
 			continue
 		}
-		if row[0] == "Отчёт: HR.xlsx" || row[0] == "Отчёт: Avito.xlsx" {
+		if row[0] == "Отчёт: HR.xlsx" || row[0] == "Еженедельный отчёт — Avito.xlsx" {
 			report = row[0]
 		}
-		if row[0] != "Сотрудник" && row[0] != "Объект" && row[0] != "Город" && row[0] != "Категория" && row[0] != "Подкатегория" && row[0] != "Номер объявления" {
+		if row[0] != "Сотрудник" && row[0] != "Объект" && row[0] != "Город" && row[0] != "Регион" && row[0] != "Заголовок" && row[0] != "Категория" && row[0] != "Подкатегория" && row[0] != "Номер объявления" {
 			continue
 		}
 		hrGroup := report == "Отчёт: HR.xlsx" && (row[0] == "Сотрудник" || row[0] == "Объект")
@@ -200,6 +200,10 @@ func TestHRExportColumnPlacement(t *testing.T) {
 			data := rows[i+1]
 			if len(data) != 13 || data[1] != "2" || data[2] != "20" || data[4] != "8" || data[6] != "4" || data[12] != "6" {
 				t.Errorf("misaligned HR data: %v", data)
+			}
+		} else if report == "Отчёт: HR.xlsx" && row[0] != "Номер объявления" {
+			if row[1] != "Количество объявлений" || row[2] != "Показы" {
+				t.Errorf("HR grouped header: %v", row)
 			}
 		} else {
 			for _, h := range row {

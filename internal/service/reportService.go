@@ -194,6 +194,8 @@ func groupKey(o models.Offer, groupBy string) string {
 		return o.Region
 	case "name":
 		return o.Name
+	case "subcategory":
+		return o.SubCategory
 	case "employee":
 		return displayDimension(o.Employee, "Сотрудник не указан")
 	case "object":
@@ -474,7 +476,20 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 		row++ // пустая строка-разделитель
 	}
 
+	regularOnly := true
 	for _, report := range reports {
+		if report.ReportType == models.ReportTypeHR {
+			regularOnly = false
+			break
+		}
+	}
+	for _, report := range reports {
+		if report.ReportType != models.ReportTypeHR {
+			if err := writeWeeklyReport(file, sheet, &row, report, regularOnly); err != nil {
+				return err
+			}
+			continue
+		}
 		// Название отчёта
 		_ = file.SetCellValue(sheet, cell(1, row), "Отчёт: "+report.FileName)
 		row += 2
