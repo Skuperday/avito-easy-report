@@ -98,7 +98,7 @@ func writeWeeklyReport(f *excelize.File, sheet string, row *int, report StoredRe
 		if err = f.SetColWidth(sheet, "B", "B", 18); err != nil {
 			return err
 		}
-		if err = f.SetColWidth(sheet, "C", "N", 20); err != nil {
+		if err = f.SetColWidth(sheet, "C", "L", 20); err != nil {
 			return err
 		}
 		showGridLines := false
@@ -214,7 +214,7 @@ func writeWeeklyReport(f *excelize.File, sheet string, row *int, report StoredRe
 		// C:E remain physically empty (no cross-sheet links or change formulas).
 	}
 	current := headRow + 17
-	regularHeaders := []string{"", "Показы", "CTR", "Просмотры", "CR", "Контакты", "Расход, ₽", "Цена контакта, ₽", "Избранное", "Продвижение, ₽", "Целевые просмотры", "Написали в чат", "Смотрели телефон", "Цена просмотра, ₽"}
+	regularHeaders := []string{"", "Показы", "CTR", "Просмотры", "CR", "Контакты", "Расход, ₽", "Цена контакта, ₽", "Избранное", "Написали в чат", "Смотрели телефон", "Цена просмотра, ₽"}
 	writeSection := func(title, dimension string, stats []models.ResultStats, top bool) error {
 		if !top {
 			sort.Slice(stats, func(i, j int) bool {
@@ -224,13 +224,13 @@ func writeWeeklyReport(f *excelize.File, sheet string, row *int, report StoredRe
 				return stats[i].Key < stats[j].Key
 			})
 		}
-		if err = f.MergeCell(sheet, cell(1, current), cell(14, current)); err != nil {
+		if err = f.MergeCell(sheet, cell(1, current), cell(len(regularHeaders), current)); err != nil {
 			return err
 		}
 		if err = write(1, current, title); err != nil {
 			return err
 		}
-		if err = setStyle(1, 14, current, section); err != nil {
+		if err = setStyle(1, len(regularHeaders), current, section); err != nil {
 			return err
 		}
 		if err = f.SetRowHeight(sheet, current, 25); err != nil {
@@ -266,7 +266,7 @@ func writeWeeklyReport(f *excelize.File, sheet string, row *int, report StoredRe
 			if err = setStyle(1, len(headers), current, bg); err != nil {
 				return err
 			}
-			values := []interface{}{s.Key, s.Shows, ratio(s.Views, s.Shows), s.Views, ratio(s.Contacts, s.Views), s.Contacts, s.Expense, ratioFloat(s.Expense, s.Contacts), s.Favorite, s.Promotion, s.TargetViewers, s.ViewWithMessage, s.LookPhone, ratioFloat(s.Expense, s.Views)}
+			values := []interface{}{s.Key, s.Shows, ratio(s.Views, s.Shows), s.Views, ratio(s.Contacts, s.Views), s.Contacts, s.Expense, ratioFloat(s.Expense, s.Contacts), s.Favorite, s.ViewWithMessage, s.LookPhone, ratioFloat(s.Expense, s.Views)}
 			if top {
 				values = []interface{}{s.Key, s.City, s.Shows, ratio(s.Views, s.Shows), s.Views, ratio(s.Contacts, s.Views), s.Contacts, s.Expense, ratioFloat(s.Expense, s.Contacts), s.Favorite}
 			}
@@ -288,7 +288,7 @@ func writeWeeklyReport(f *excelize.File, sheet string, row *int, report StoredRe
 					switch c {
 					case 2, 4:
 						style = pctStyle
-					case 6, 7, 9, 13:
+					case 6, 7, 11:
 						style = cashStyle
 					}
 				}

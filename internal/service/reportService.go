@@ -121,12 +121,29 @@ func ParseReport(reader io.Reader, fileName string, objStore *ObjectStore) ([]mo
 	columnIndexMap, warnings := getColumnIndexMap(rows[0])
 	offers := make([]models.Offer, 0, len(rows)-1)
 	listingColIdx := columnIndexMap["listingNumber"]
+	titleColIdx := columnIndexMap["name"]
 
 	// HR-отчёт: строим маппинг Лист1 (номер объявления → объект)
 	objLookup := buildObjectLookup(f)
 
 	for rowIdx, row := range rows[1:] {
 		offer := parseRow(row, columnIndexMap)
+		if parameter := safeGet(row, columnIndexMap["parameter"]); parameter != "" {
+			offer.SubCategory = parameter
+			if titleColIdx < 0 {
+				// Совместимость со старыми файлами без колонки названия.
+				offer.Name = parameter
+			}
+		}
+		// Название объявления в выгрузке Avito обычно HYPERLINK без cached value.
+		if titleColIdx >= 0 {
+			cellRef, _ := excelize.CoordinatesToCellName(titleColIdx+1, rowIdx+2)
+			if formula, err := f.GetCellFormula("Sheet1", cellRef); err == nil {
+				if title, ok := extractHyperlinkTitle(formula); ok {
+					offer.Name = title
+				}
+			}
+		}
 		// Извлекаем номер объявления из HYPERLINK, если колонка есть
 		if listingColIdx >= 0 {
 			cellRef, _ := excelize.CoordinatesToCellName(listingColIdx+1, rowIdx+2)
@@ -509,7 +526,7 @@ func ExportXLSX(reports []StoredReport, w io.Writer) error {
 		// Категории
 		writeSection("По категориям", "Категория", GetResultStats(GetGroupedStats(report.Offers, "category")), headers, isHR)
 		// Подкатегории
-		writeSection("По подкатегориям", "Подкатегория", GetResultStats(GetGroupedStats(report.Offers, "name")), headers, isHR)
+		writeSection("По подкатегориям", "Подкатегория", GetResultStats(GetGroupedStats(report.Offers, "subcategory")), headers, isHR)
 		// Топ-10 объявлений
 		writeSection("Топ-10 объявлений по контактам", "Номер объявления", GetTopListings(report.Offers, 10), offerHeaders, isHR)
 
@@ -603,6 +620,17 @@ func extractListingNumber(raw string) string {
 	return raw
 }
 
+var hyperlinkTitlePattern = regexp.MustCompile(`(?i)^=?HYPERLINK\(\s*"(?:[^"]|"")*"\s*[,;]\s*"((?:[^"]|"")*)"\s*\)$`)
+
+// extractHyperlinkTitle возвращает только буквальный текст ссылки, не URL и не формулу.
+func extractHyperlinkTitle(formula string) (string, bool) {
+	parts := hyperlinkTitlePattern.FindStringSubmatch(strings.TrimSpace(formula))
+	if parts == nil {
+		return "", false
+	}
+	return strings.ReplaceAll(parts[1], `""`, `"`), true
+}
+
 // buildObjectLookup читает Лист1 (номер объявления → объект) для HR-отчётов
 func buildObjectLookup(f *excelize.File) map[string]string {
 	lookup := make(map[string]string)
@@ -640,7 +668,8 @@ func getColumnIndexMap(row []string) (map[string]int, []string) {
 		"shows":           {"Показы"},
 		"views":           {"Просмотры"},
 		"favorite":        {"Добавили в избранное", "Добавили в\u00a0избранное"},
-		"name":            {"Название объявления", "Параметр"},
+		"name":            {"Название объявления", "Заголовок объявления"},
+		"parameter":       {"Параметр"},
 		"listingNumber":   {"Номер объявления", "Номер\u00a0объявления", "ID объявления", "№ объявления", "ID", "Номер"},
 		"contacts":        {"Контакты"},
 		"employee":        {"Сотрудник"},
@@ -656,7 +685,7 @@ func getColumnIndexMap(row []string) (map[string]int, []string) {
 	for key, names := range mappings {
 		idx := findColumnIndex(row, names)
 		columnIndex[key] = idx
-		if idx < 0 {
+		if idx < 0 && key != "parameter" {
 			warnings = append(warnings, fmt.Sprintf("Колонка «%s» не найдена в отчёте", names[0]))
 		}
 	}

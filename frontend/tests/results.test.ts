@@ -97,7 +97,7 @@ describe('HR grouped listing count', () => {
     for (const label of ['По сотрудникам', 'По объектам']) {
       expect(wrapper.findAll('button').some(b => b.text() === label)).toBe(false)
       expect(wrapper.find('table').text()).not.toContain(countLabel)
-      expect(wrapper.findAll('thead tr')[1]!.findAll('th')).toHaveLength(34)
+      expect(wrapper.findAll('thead tr')[1]!.findAll('th')).toHaveLength(25)
     }
   })
   it.each(['По сотрудникам', 'По объектам'])('renders and sorts only HR %s', async label => {
@@ -123,8 +123,20 @@ describe('HR grouped listing count', () => {
     for (const table of wrapper.findAll('table')) {
       expect(table.text()).not.toContain(countLabel)
       const headers = table.findAll('th')
-      expect(headers).toHaveLength(label === 'По объявлениям' ? 13 : 12)
+      expect(headers).toHaveLength(label === 'По объявлениям' ? 10 : 9)
       expect(headers[label === 'По объявлениям' ? 2 : 1]!.text()).toBe('Показы')
     }
+  })
+})
+
+describe('title and subcategory grouping', () => {
+  it('requests the correct dimension for each tab', async () => {
+    await openResults()
+    await group('По заголовкам')
+    expect(apiFetch).toHaveBeenLastCalledWith('/reports/multi?ids=a,b&groupBy=name')
+    expect(wrapper.find('table thead th').text()).toBe('Заголовок')
+    await group('По подкатегориям')
+    expect(apiFetch).toHaveBeenLastCalledWith('/reports/multi?ids=a,b&groupBy=subcategory')
+    expect(wrapper.find('table thead th').text()).toBe('Подкатегория')
   })
 })

@@ -36,7 +36,7 @@ func TestParseReportTypeCanonicalValues(t *testing.T) {
 
 func TestReportTypeGroupingMatrix(t *testing.T) {
 	regularGroups := map[string]bool{
-		"city": true, "category": true, "name": true, "offers": true,
+		"city": true, "category": true, "name": true, "subcategory": true, "offers": true,
 		"employee": false, "object": false, "employee-object": false,
 	}
 	for group, want := range regularGroups {
@@ -44,7 +44,7 @@ func TestReportTypeGroupingMatrix(t *testing.T) {
 			t.Errorf("regular group %q: получено %v, ожидалось %v", group, got, want)
 		}
 	}
-	for _, group := range []string{"city", "category", "name", "offers", "employee", "object", "employee-object"} {
+	for _, group := range []string{"city", "category", "name", "subcategory", "offers", "employee", "object", "employee-object"} {
 		if !isGroupAllowed(models.ReportTypeHR, group) {
 			t.Errorf("HR group %q должен быть доступен", group)
 		}

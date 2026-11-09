@@ -92,13 +92,13 @@ func TestRegularExportUsesWeeklyLayoutAndLeavesManualFieldsBlank(t *testing.T) {
 		find(label)
 	}
 	r := find("По регионам")
-	if value("A", r+1) != "Регион" || value("J", r+1) != "Продвижение, ₽" || value("N", r+1) != "Цена просмотра, ₽" {
+	if value("A", r+1) != "Регион" || value("J", r+1) != "Написали в чат" || value("K", r+1) != "Смотрели телефон" || value("L", r+1) != "Цена просмотра, ₽" || value("M", r+1) != "" {
 		t.Fatal("некорректная шапка региона")
 	}
-	if value("A", r+2) != "Московская область" || value("B", r+2) != "150" || value("D", r+2) != "30" || value("F", r+2) != "6" || value("G", r+2) != "85" || value("J", r+2) != "70" || value("K", r+2) != "12" {
+	if value("A", r+2) != "Московская область" || value("B", r+2) != "150" || value("D", r+2) != "30" || value("F", r+2) != "6" || value("G", r+2) != "85" || value("J", r+2) != "1" || value("K", r+2) != "3" || value("M", r+2) != "" {
 		t.Errorf("данные региона: %v", rows[r+1])
 	}
-	for col, want := range map[string]float64{"C": 0.2, "E": 0.2, "H": 85.0 / 6, "N": 85.0 / 30} {
+	for col, want := range map[string]float64{"C": 0.2, "E": 0.2, "H": 85.0 / 6, "L": 85.0 / 30} {
 		v := value(col, r+2)
 		n, err := strconv.ParseFloat(v, 64)
 		if err != nil || math.Abs(n-want) > 0.001 {
@@ -113,8 +113,8 @@ func TestRegularExportUsesWeeklyLayoutAndLeavesManualFieldsBlank(t *testing.T) {
 	}
 	for _, r := range rows {
 		for _, v := range r {
-			if strings.Contains(v, "Отклики") || strings.Contains(v, "Ср. цена отклика") {
-				t.Fatal("HR-колонка в обычном отчёте")
+			if strings.Contains(v, "Отклики") || strings.Contains(v, "Ср. цена отклика") || v == "Продвижение, ₽" || v == "Целевые просмотры" {
+				t.Fatal("лишняя колонка в обычном отчёте")
 			}
 		}
 	}

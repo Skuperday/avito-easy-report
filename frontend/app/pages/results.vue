@@ -8,7 +8,8 @@
       <button class="btn text-sm" :class="groupBy === 'city' ? '' : 'secondary'" @click="groupBy = 'city'; reload()">По городам</button>
       <button class="btn text-sm" :class="groupBy === 'region' ? '' : 'secondary'" @click="groupBy = 'region'; reload()">По регионам</button>
       <button class="btn text-sm" :class="groupBy === 'category' ? '' : 'secondary'" @click="groupBy = 'category'; reload()">По категориям</button>
-      <button class="btn text-sm" :class="groupBy === 'name' ? '' : 'secondary'" @click="groupBy = 'name'; reload()">По подкатегориям</button>
+      <button class="btn text-sm" :class="groupBy === 'name' ? '' : 'secondary'" @click="groupBy = 'name'; reload()">По заголовкам</button>
+      <button class="btn text-sm" :class="groupBy === 'subcategory' ? '' : 'secondary'" @click="groupBy = 'subcategory'; reload()">По подкатегориям</button>
       <button class="btn text-sm" :class="groupBy === 'offers' ? '' : 'secondary'" @click="groupBy = 'offers'; reload()">По объявлениям</button>
       <button v-if="hrGroupsAvailable" class="btn text-sm" :class="groupBy === 'employee' ? '' : 'secondary'" @click="groupBy = 'employee'; reload()">По сотрудникам</button>
       <button v-if="hrGroupsAvailable" class="btn text-sm" :class="groupBy === 'object' ? '' : 'secondary'" @click="groupBy = 'object'; reload()">По объектам</button>
@@ -233,7 +234,7 @@ const showCompareListingCount = computed(() => isHRGroup.value && compareData.va
 
 const sortKey = ref('contacts')
 const sortDir = ref<'asc' | 'desc'>('desc')
-const groupLabel = computed(() => groupBy.value === 'city' ? 'Город' : groupBy.value === 'region' ? 'Регион' : groupBy.value === 'category' ? 'Категория' : groupBy.value === 'offers' ? '№' : groupBy.value === 'employee' ? 'Сотрудник' : groupBy.value === 'object' || groupBy.value === 'employee-object' ? 'Объект' : 'Подкатегория')
+const groupLabel = computed(() => groupBy.value === 'city' ? 'Город' : groupBy.value === 'region' ? 'Регион' : groupBy.value === 'category' ? 'Категория' : groupBy.value === 'subcategory' ? 'Подкатегория' : groupBy.value === 'offers' ? '№' : groupBy.value === 'employee' ? 'Сотрудник' : groupBy.value === 'object' || groupBy.value === 'employee-object' ? 'Объект' : 'Заголовок')
 const hrGroupsAvailable = computed(() => {
   if (isCompare.value) {
     const types = compareData.value?.reportTypes || []
